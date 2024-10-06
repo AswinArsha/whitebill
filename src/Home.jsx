@@ -90,13 +90,14 @@ const Home = ({ role }) => { // Accept role as a prop
   // Conditionally render icons based on user role
   const navItems = [
     { path: "calendar", icon: <Calendar className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Calendar" },
+    { path: "attendance", icon: <CheckCircle className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Attendance" },
     ...(role === "admin"
       ? [
           { path: "billing", icon: <ReceiptText className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Billing" },
           { path: "monthly-expenses", icon: <ReceiptIndianRupee className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Expenses" },
           { path: "clients", icon: <Users className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Clients" },
           { path: "remainders", icon: <AlarmClock className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Remainders" },
-          { path: "attendance", icon: <CheckCircle className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Attendance" },
+       
         ]
       : []),
   ];
@@ -169,7 +170,7 @@ const Home = ({ role }) => { // Accept role as a prop
           <Route path="monthly-expenses" element={<MonthlyExpenses />} />
           <Route path="clients" element={<Clients />} />
           <Route path="remainders" element={<Remainders />} />
-          <Route path="attendance" element={<Attendance />} />
+          <Route path="attendance" element={<Attendance role={role} />} /> 
           <Route path="attendance/:id" element={<IndividualAttendanceReport />} />
           <Route index element={<Navigate to="calendar" />} />
         </Routes>

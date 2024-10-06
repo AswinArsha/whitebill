@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,8 @@ import { Calendar as CalendarIcon, Trash2 as TrashIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AlertNotification from "./AlertNotification";
+import ProfileDropdown from "./ProfileDropdown";
 
 const Remainders = () => {
   const [title, setTitle] = useState("");
@@ -159,15 +162,16 @@ const Remainders = () => {
       const now = new Date();
       reminders.forEach((reminder) => {
         const reminderTime = new Date(reminder.date);
-        if (reminderTime <= now) {
+        if (reminderTime <= now && !reminder.completed) {
           showNotification(reminder);
           completeReminder(reminder.id, reminder);
         }
       });
     }, 10000); // Check every 10 seconds
-
+  
     return () => clearInterval(interval);
   }, [reminders]);
+  
 
   const filteredReminders = reminders.filter((reminder) =>
     reminder.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -177,7 +181,13 @@ const Remainders = () => {
     <div className="flex flex-col min-h-screen">
       <div className="flex mb-4 justify-between items-center">
         <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Reminders</h2>
-        <NotificationDropdown />
+        <div className="flex space-x-5 mb-4">
+          <div className="">
+            <ProfileDropdown />
+          </div>
+          <AlertNotification />
+          <NotificationDropdown />
+        </div>
       </div>
       <Card className="bg-gray-50 p-6 shadow-none">
         <div className="flex justify-between mb-6">
@@ -372,7 +382,7 @@ const AddReminderForm = ({
         </div>
       </div>
 
-      <Button onClick={saveReminder} className="mt-4 w-full text-white bg-blue-600 hover:bg-blue-700 rounded-md py-2 transition-colors">
+      <Button onClick={saveReminder} className="mt-4 w-full text-white  rounded-md py-2 transition-colors">
         Save Reminder
       </Button>
     </div>
@@ -380,3 +390,5 @@ const AddReminderForm = ({
 };
 
 export default Remainders;
+
+

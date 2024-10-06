@@ -31,6 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import NotificationDropdown from "./NotificationDropdown";
+import ProfileDropdown from "./ProfileDropdown";
+import AlertNotification from "./AlertNotification";
 import { Textarea } from "@/components/ui/textarea";
 
 const Client = () => {
@@ -275,9 +277,18 @@ const Client = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex mb-4 justify-between items-center ">
+      <div className="flex justify-between items-center ">
         <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Clients</h2>
-        <NotificationDropdown />
+
+        <div className="flex space-x-5 mb-4">
+          <div className="">
+            <ProfileDropdown />
+          </div>
+          <AlertNotification />
+          <NotificationDropdown />
+        </div>
+
+
       </div>
 
       <Card className="flex px-1 pt-4 flex-col w-[1230px] min-h-screen bg-gray-50">

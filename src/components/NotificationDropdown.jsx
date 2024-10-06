@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { format, subDays } from "date-fns";
-import { supabase } from "@/supabase"; // Ensure this imports the correctly configured Supabase client
+import { supabase } from "@/supabase";
 
 const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState([]);
@@ -12,7 +12,7 @@ const NotificationDropdown = () => {
     fetchNotifications();
 
     const notificationsSubscription = supabase
-      .channel("notifications")
+      .channel("notifications-dropdown") // Unique channel name
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
@@ -33,7 +33,7 @@ const NotificationDropdown = () => {
         .from("notifications")
         .select("*")
         .gte("created_at", subDays(new Date(), 1).toISOString())
-        .order("created_at", { ascending: false }); // Sort by created_at in descending order
+        .order("created_at", { ascending: false });
 
       if (error) {
         throw error;
@@ -73,7 +73,7 @@ const NotificationDropdown = () => {
         <button className="relative hover:text-gray-700">
           <Bell className="w-6 h-6" />
           {unreadCount > 0 && (
-            <span className="absolute bottom-3 left-3 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+            <span className="absolute bottom-5 left-3 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
               {unreadCount}
             </span>
           )}
@@ -82,9 +82,8 @@ const NotificationDropdown = () => {
       <PopoverContent className="w-80 p-4 shadow-lg rounded-md bg-white mr-5">
         <h3 className="font-bold mb-3">Notifications</h3>
         {notifications.length === 0 ? (
-          <div className=" text-gray-600">
+          <div className="text-gray-600">
             <p className="mb-1">No notifications</p>
-    
           </div>
         ) : (
           <ul className="space-y-2 max-h-64 overflow-auto">

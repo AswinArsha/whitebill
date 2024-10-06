@@ -20,7 +20,6 @@ const Login = ({ setRole, setIsAuthenticated }) => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
     const { data, error } = await supabase
       .from("users")
       .select("*")
@@ -40,63 +39,54 @@ const Login = ({ setRole, setIsAuthenticated }) => {
     // Set the user's role and authentication status
     setRole(data.role);
     setIsAuthenticated(true);
-
-    // Store role in local storage to persist login (optional)
-    localStorage.setItem("role", data.role);
-
     navigate("/home");
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleLogin(e);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              {error && <p className="text-red-500">{error}</p>}
+    <div className="flex  justify-center items-center h-screen">
+    <Card className="w-[400px]">
+      <CardHeader>
+        <CardTitle>Login</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleLogin}>
+          <div className="grid w-full items-center gap-4">
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
             </div>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setUsername("");
-              setPassword("");
-              setError(null);
-            }}
-          >
-            Reset
-          </Button>
-          <Button onClick={handleLogin}>Login</Button>
-        </CardFooter>
-      </Card>
-    </div>
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+          </div>
+        </form>
+      </CardContent>
+      <CardFooter className="flex justify-end">
+        {error && <p className="text-red-500">{error}</p>}
+       
+        <Button onClick={handleLogin}>Login</Button>
+      </CardFooter>
+    </Card></div>
   );
 };
 

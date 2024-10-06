@@ -41,8 +41,9 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Menu } from "lucide-react"; // Added Menu Icon
 import NotificationDropdown from "./NotificationDropdown";
+import AlertNotification from "./AlertNotification";
 import jsPDF from "jspdf";
-import ProfileDropdown from "./ProfileDropdown"; 
+import ProfileDropdown from "./ProfileDropdown";
 
 const CATEGORIES = [
   { value: "shoot", label: "Shoot" },
@@ -63,7 +64,7 @@ const getCategoryColor = (category, isDone) => {
     case "post":
       return "#f48c06";
     case "editing": // Assigning color to the new "editing" category
-      return "#9d4edd"; 
+      return "#9d4edd";
     default:
       return "#6c757d";
   }
@@ -475,127 +476,145 @@ const CalendarSection = () => {
   };
 
   const generateEnhancedCalendarPDF = () => {
-    const doc = new jsPDF('landscape');
-  
+    const doc = new jsPDF("landscape");
+
     // Font and styling variables
-    const baseFont = 'helvetica';
+    const baseFont = "helvetica";
     const titleFontSize = 22;
     const dayLabelFontSize = 12;
     const dateFontSize = 10;
     const eventFontSize = 12;
-    const gridLineColor = '#353535';
-    const dayHeaderBg = '#353535';
-    const dayHeaderTextColor = '#f8f9fa';
-    const textColor = '#333333';
-  
+    const gridLineColor = "#353535";
+    const dayHeaderBg = "#353535";
+    const dayHeaderTextColor = "#f8f9fa";
+    const textColor = "#333333";
+
     const startX = 14;
     const startY = 30;
     const cellWidth = 40;
     const cellHeight = 35;
-  
+
     // Use the current displayed date in the FullCalendar component
-    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-  
+    const firstDay = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      1
+    );
+    const lastDay = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + 1,
+      0
+    );
+
     // Get the day of the week the month starts on
     const firstWeekDay = firstDay.getDay();
-  
-    doc.setFont(baseFont, 'bold');
+
+    doc.setFont(baseFont, "bold");
     doc.setFontSize(titleFontSize);
     doc.setTextColor(textColor);
-    doc.text(`Monthly Chart ${filterClientName ? `- ${filterClientName}` : ''}`, 148, 15, { align: 'center' });
-  
+    doc.text(
+      `Monthly Chart ${filterClientName ? `- ${filterClientName}` : ""}`,
+      148,
+      15,
+      { align: "center" }
+    );
+
     // Days of the Week Header with black border
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     daysOfWeek.forEach((day, index) => {
       // Black border for headers
-      doc.setDrawColor('#000000'); // Black border
+      doc.setDrawColor("#000000"); // Black border
       doc.rect(startX + index * cellWidth, startY - 10, cellWidth, 10); // Border of day header
-  
+
       doc.setFillColor(dayHeaderBg); // Background color for the day headers
       doc.setTextColor(dayHeaderTextColor); // Text color for the day headers
-      doc.rect(startX + index * cellWidth, startY - 10, cellWidth, 10, 'F'); // Fill rectangle with color
+      doc.rect(startX + index * cellWidth, startY - 10, cellWidth, 10, "F"); // Fill rectangle with color
       doc.setFontSize(dayLabelFontSize);
 
-      doc.text(day, startX + index * cellWidth + 12, startY - 2, { align: 'center' });
+      doc.text(day, startX + index * cellWidth + 12, startY - 2, {
+        align: "center",
+      });
     });
-  
+
     // Calendar Grid
     let currentWeek = 0;
-  
+
     // Start with empty cells before the first day of the month
     for (let i = 0; i < firstWeekDay; i++) {
       const x = startX + i * cellWidth;
       const y = startY + currentWeek * cellHeight;
-  
+
       // Draw empty cell
-      doc.setFillColor('#FFFFFF'); // Empty cell background
+      doc.setFillColor("#FFFFFF"); // Empty cell background
       doc.rect(x, y, cellWidth, cellHeight);
       doc.setDrawColor(gridLineColor);
       doc.setLineWidth(0.1);
       doc.rect(x, y, cellWidth, cellHeight);
     }
-  
+
     // Fill in the current month's days
     for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
       const dayOfWeek = d.getDay();
       const x = startX + dayOfWeek * cellWidth;
       const y = startY + currentWeek * cellHeight;
-  
+
       // Draw calendar cell for the current month
-      doc.setFillColor('#FFFFFF'); // White background for current month
+      doc.setFillColor("#FFFFFF"); // White background for current month
       doc.rect(x, y, cellWidth, cellHeight);
-  
+
       doc.setDrawColor(gridLineColor);
       doc.setLineWidth(0.1);
       doc.rect(x, y, cellWidth, cellHeight);
-  
+
       // Add date number for current month
       doc.setFontSize(dateFontSize);
       doc.setTextColor(textColor);
       doc.text(d.getDate().toString(), x + cellWidth - 8, y + 10);
-  
-      // Add events for the day 
-      const dayEvents = events.filter(event => {
+
+      // Add events for the day
+      const dayEvents = events.filter((event) => {
         const eventDate = new Date(event.start);
-        return eventDate.getDate() === d.getDate() &&
+        return (
+          eventDate.getDate() === d.getDate() &&
           eventDate.getMonth() === d.getMonth() &&
-          eventDate.getFullYear() === d.getFullYear();
+          eventDate.getFullYear() === d.getFullYear()
+        );
       });
-  
+
       // Display events as plain text
       doc.setFontSize(eventFontSize);
       dayEvents.forEach((event, index) => {
-        if (index < 2) {  // Limit to 2 events per day for clarity
-          doc.text(event.title, x + 4, y + 14 + index * 6, { maxWidth: cellWidth - 8 });
+        if (index < 2) {
+          // Limit to 2 events per day for clarity
+          doc.text(event.title, x + 4, y + 14 + index * 6, {
+            maxWidth: cellWidth - 8,
+          });
         }
       });
-  
+
       if (dayOfWeek === 6) currentWeek++;
     }
-  
+
     // Fill the remaining cells after the last day of the month with empty cells
     const lastWeekDay = lastDay.getDay();
     if (lastWeekDay < 6) {
       for (let i = lastWeekDay + 1; i <= 6; i++) {
         const x = startX + i * cellWidth;
         const y = startY + currentWeek * cellHeight;
-  
+
         // Draw empty cell
-        doc.setFillColor('#FFFFFF'); // Empty cell background
+        doc.setFillColor("#FFFFFF"); // Empty cell background
         doc.rect(x, y, cellWidth, cellHeight);
         doc.setDrawColor(gridLineColor);
         doc.setLineWidth(0.1);
         doc.rect(x, y, cellWidth, cellHeight);
       }
     }
-  
+
     // Save the PDF
-    doc.save(`monthly_chart_${filterClientName || 'client'}.pdf`);
+    doc.save(`monthly_chart_${filterClientName || "client"}.pdf`);
   };
-  
-  
-    
+
   const triggerPrint = useCallback(() => {
     generateEnhancedCalendarPDF();
   }, [filterClientName, events, currentMonth]);
@@ -614,22 +633,34 @@ const CalendarSection = () => {
   return (
     <div>
       <div className="flex justify-between items-center ">
-        <h2 className="text-2xl font-bold mb-4 ml-2 md:-ml-0">Event Calendar</h2>
+        <h2 className="text-2xl font-bold mb-4 ml-2 md:-ml-0">
+          Event Calendar
+        </h2>
         <div className="flex space-x-5 mb-4">
           <div className="">
-        <ProfileDropdown /></div>
-        <NotificationDropdown /></div>
+            <ProfileDropdown />
+          </div>
+          <AlertNotification />
+          <NotificationDropdown />
+        </div>
       </div>
       <Card className="bg-gray-50 p-4">
         {/* Mobile: Show a hamburger menu to toggle the filter */}
         <div className="md:hidden mb-4">
-          <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+          >
             <Menu className="w-6 h-6" />
           </Button>
         </div>
 
         {/* Filters are hidden on mobile unless the menu is toggled */}
-        <div className={`md:flex mb-4 space-x-2 ${showFilters ? "block" : "hidden"} md:block`}>
+        <div
+          className={`md:flex mb-4 space-x-2 ${
+            showFilters ? "block" : "hidden"
+          } md:block`}
+        >
           <Input
             placeholder="Search events..."
             value={searchTerm}
@@ -865,18 +896,21 @@ const CalendarSection = () => {
                 <Label htmlFor="isDone">Mark as Done</Label>
               </div>
             </div>
-         
-            <DialogFooter className={"mt-4"}>
-  {isEditing && (
-    <Button variant="destructive" className="mr-auto" onClick={handleEventDelete}>
-      Delete
-    </Button>
-  )}
-  <Button className="ml-auto" onClick={handleEventAdd}>
-    {isEditing ? "Update" : "Add"} Event
-  </Button>
-</DialogFooter>
 
+            <DialogFooter className={"mt-4"}>
+              {isEditing && (
+                <Button
+                  variant="destructive"
+                  className="mr-auto"
+                  onClick={handleEventDelete}
+                >
+                  Delete
+                </Button>
+              )}
+              <Button className="ml-auto" onClick={handleEventAdd}>
+                {isEditing ? "Update" : "Add"} Event
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </Card>

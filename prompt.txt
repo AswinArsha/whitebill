@@ -1,478 +1,665 @@
-import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, ChevronRight, ChevronLeft } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { supabase } from '../supabase';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/use-toast';
-import NotificationDropdown from "./NotificationDropdown";
+Remainders.jsx :
 
-const Client = () => {
-  const [columns, setColumns] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [expandedColumns, setExpandedColumns] = useState([
-    'Lead', 'Contacted', 'Proposal', 'Won', 'Lost'
-  ]);
-  const { toast } = useToast();
+import React, { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/supabase";
+import { format } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
+import { useMediaQuery } from "./hooks/useMediaQuery";
+import NotificationDropdown from "./NotificationDropdown";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon, Trash2 as TrashIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AlertNotification from "./AlertNotification";
+import ProfileDropdown from "./ProfileDropdown";
+
+const Remainders = () => {
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(null);
+  const [time, setTime] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [reminders, setReminders] = useState([]);
+  const [completedReminders, setCompletedReminders] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [open, setOpen] = useState(false);
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   useEffect(() => {
-    fetchClients();
+    fetchReminders();
+
+    const remindersSubscription = supabase
+      .channel("reminders")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reminders" }, () => {
+        fetchReminders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(remindersSubscription);
+    };
   }, []);
 
-  const fetchClients = async () => {
-    const { data: clientData, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('order', { ascending: true });
+  const fetchReminders = async () => {
+    const { data, error } = await supabase.from("reminders").select("*").eq("completed", false);
+    if (error) console.error("Error fetching reminders:", error);
+    else setReminders(data);
+
+    const completedData = await supabase.from("reminders").select("*").eq("completed", true);
+    if (completedData.error) console.error("Error fetching completed reminders:", completedData.error);
+    else setCompletedReminders(completedData.data);
+  };
+
+  const saveReminder = async () => {
+    if (!title || !date || !time) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    const reminderDateTime = new Date(`${date}T${time}`);
+    const newReminder = {
+      title,
+      date: reminderDateTime.toISOString(),
+      completed: false,
+      is_recurring: isRecurring,
+      recurrence_interval: isRecurring ? "monthly" : "none",
+    };
+
+    const { data, error } = await supabase.from("reminders").insert([newReminder]);
 
     if (error) {
-      console.error('Error fetching clients:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load clients.',
-        variant: 'destructive',
-      });
-    } else {
-      const categorizedData = [
-        { name: 'Lead', color: 'yellow', bgColor: 'bg-yellow-50', clients: [] },
-        { name: 'Contacted', color: 'blue', bgColor: 'bg-blue-50', clients: [] },
-        { name: 'Proposal', color: 'purple', bgColor: 'bg-purple-50', clients: [] },
-        { name: 'Won', color: 'green', bgColor: 'bg-green-50', clients: [] },
-        { name: 'Lost', color: 'red', bgColor: 'bg-red-50', clients: [] },
-      ];
+      console.error("Error saving reminder:", error);
+      return;
+    }
 
-      clientData.forEach((client) => {
-        const category = categorizedData.find(column => column.name.toLowerCase() === client.status);
-        if (category) {
-          category.clients.push(client);
+    if (data && data.length > 0) {
+      setTitle("");
+      setDate(null);
+      setTime("");
+      setIsRecurring(false);
+    } else {
+      console.error("No data returned after insert.");
+    }
+    setOpen(false);
+  };
+
+  const showNotification = async (reminder) => {
+    if (Notification.permission === "granted") {
+      console.log("Notification will be triggered:", reminder.title);
+      try {
+        new Notification("Reminder", {
+          body: ` ${reminder.title}`,
+          icon: "path/to/icon.png", // Add an icon if needed
+          tag: reminder.id, // Unique identifier for the notification
+        });
+      } catch (e) {
+        console.error("Notification error:", e);
+      }
+    } else {
+      console.warn("Notifications are not permitted in this browser.");
+    }
+    await addNotification(reminder.title, reminder.id);
+  };
+
+  const addNotification = async (message, reminderId) => {
+    const newNotification = { message, reminder_id: reminderId, read: false };
+
+    const { data, error } = await supabase.from("notifications").insert([newNotification]);
+
+    if (error) {
+      console.error("Error saving notification:", error);
+      return;
+    }
+  };
+
+  const completeReminder = async (id, reminder) => {
+    const { error } = await supabase.from("reminders").update({ completed: true }).eq("id", id);
+
+    if (error) {
+      console.error("Error completing reminder:", error);
+      return;
+    }
+
+    const completedReminder = reminders.find((r) => r.id === id);
+    setCompletedReminders((prev) => [...prev, completedReminder]);
+
+    // If the reminder is recurring, create the next occurrence
+    if (reminder.is_recurring && reminder.recurrence_interval === "monthly") {
+      const nextDate = new Date(reminder.date);
+      nextDate.setMonth(nextDate.getMonth() + 1);
+
+      const newReminder = {
+        title: reminder.title,
+        date: nextDate.toISOString(),
+        completed: false,
+        is_recurring: true,
+        recurrence_interval: "monthly",
+      };
+
+      await supabase.from("reminders").insert([newReminder]);
+    }
+  };
+
+  const deleteReminder = async (id) => {
+    const { error } = await supabase.from("reminders").delete().eq("id", id);
+
+    if (error) {
+      console.error("Error deleting reminder:", error);
+      return;
+    }
+
+    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    setCompletedReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      reminders.forEach((reminder) => {
+        const reminderTime = new Date(reminder.date);
+        if (reminderTime <= now && !reminder.completed) {
+          showNotification(reminder);
+          completeReminder(reminder.id, reminder);
         }
       });
+    }, 10000); // Check every 10 seconds
+  
+    return () => clearInterval(interval);
+  }, [reminders]);
+  
 
-      setColumns(categorizedData);
-    }
-  };
-
-  const handleAddOrUpdateClient = async (client) => {
-    if (isEditMode) {
-      const { error } = await supabase
-        .from('clients')
-        .update(client)
-        .eq('id', client.id);
-
-      if (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to update client.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: 'Client updated successfully.',
-          variant: 'positive',
-        });
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('clients')
-        .insert([{ ...client, order: 0 }]);
-
-      if (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to add client.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: 'Client added successfully.',
-          variant: 'positive',
-        });
-
-        // Insert at the start of the relevant column
-        const updatedColumns = columns.map(column => {
-          if (column.name.toLowerCase() === client.status) {
-            return {
-              ...column,
-              clients: [data[0], ...column.clients],
-            };
-          }
-          return column;
-        });
-
-        setColumns(updatedColumns);
-      }
-    }
-
-    fetchClients();
-    setSelectedClient(null);
-  };
-
-  const handleDeleteClient = async (id) => {
-    const { error } = await supabase.from('clients').delete().eq('id', id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete client.',
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: 'Success',
-        description: 'Client deleted successfully.',
-        variant: 'positive',
-      });
-    }
-
-    fetchClients();
-  };
-
-  const onDragEnd = async (result) => {
-    const { source, destination } = result;
-
-    if (!destination) return;
-
-    const sourceColumnIndex = columns.findIndex(column => column.name === source.droppableId);
-    const destinationColumnIndex = columns.findIndex(column => column.name === destination.droppableId);
-
-    const sourceColumn = columns[sourceColumnIndex];
-    const destinationColumn = columns[destinationColumnIndex];
-
-    const sourceItems = Array.from(sourceColumn.clients);
-    const [removed] = sourceItems.splice(source.index, 1);
-
-    if (sourceColumnIndex === destinationColumnIndex) {
-      sourceItems.splice(destination.index, 0, removed);
-      const newColumns = [...columns];
-      newColumns[sourceColumnIndex].clients = sourceItems;
-      setColumns(newColumns);
-
-      // Update order in the database
-      if (destinationColumn.name.toLowerCase() === 'proposal') {
-        await updateClientOrder(sourceItems);
-      }
-    } else {
-      const destinationItems = Array.from(destinationColumn.clients);
-      // Insert at the start of the destination column
-      destinationItems.unshift(removed);
-
-      const newColumns = [...columns];
-      newColumns[sourceColumnIndex].clients = sourceItems;
-      newColumns[destinationColumnIndex].clients = destinationItems;
-      setColumns(newColumns);
-
-      removed.status = destination.droppableId.toLowerCase();
-      const { error } = await supabase
-        .from('clients')
-        .update({ status: removed.status, order: 0 })
-        .eq('id', removed.id);
-
-      if (error) {
-        console.error('Error updating client status:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to update client status.',
-          variant: 'destructive',
-        });
-      }
-
-      // Update order in the database for both columns
-      await updateClientOrder(sourceItems);
-      await updateClientOrder(destinationItems);
-    }
-  };
-
-  const updateClientOrder = async (clients) => {
-    const updates = clients.map((client, index) => ({
-      id: client.id,
-      order: index,
-      name: client.name,
-      company: client.company,
-      phone: client.phone,
-      location: client.location,
-      status: client.status,
-      client_name: client.client_name
-    }));
-
-    const { error } = await supabase
-      .from('clients')
-      .upsert(updates, { onConflict: 'id' });
-
-    if (error) {
-      console.error('Error updating client order:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update client order.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const toggleColumnExpansion = (columnName) => {
-    setExpandedColumns((prev) =>
-      prev.includes(columnName)
-        ? prev.filter((name) => name !== columnName)
-        : [...prev, columnName]
-    );
-  };
-
-  const filteredColumns = columns.map(column => ({
-    ...column,
-    clients: column.clients.filter(client =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.client_name.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-  }));
-  const getTextColorClass = (color) => {
-    switch (color) {
-      case 'blue':
-        return 'text-blue-600';
-      case 'red':
-        return 'text-red-600';
-      case 'green':
-        return 'text-green-600';
-      case 'yellow':
-        return 'text-yellow-600';
-      case 'purple':
-        return 'text-purple-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
+  const filteredReminders = reminders.filter((reminder) =>
+    reminder.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex mb-4 justify-between items-center ">
-        <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Clients</h2>
-        <NotificationDropdown />
+      <div className="flex mb-4 justify-between items-center">
+        <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Reminders</h2>
+        <div className="flex space-x-5 mb-4">
+          <div className="">
+            <ProfileDropdown />
+          </div>
+          <AlertNotification />
+          <NotificationDropdown />
+        </div>
       </div>
-
-      <Card className="flex px-1 pt-4 flex-col w-[1230px] min-h-screen bg-gray-50">
-        <div className="flex px-4 w-[1230px] space-x-4">
+      <Card className="bg-gray-50 p-6 shadow-none">
+        <div className="flex justify-between mb-6">
           <Input
-            placeholder="Search clients"
+            type="text"
+            placeholder="Search Reminders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="mr-4"
+            className="w-full mr-4 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <Button onClick={() => { setIsEditMode(false); setSelectedClient({}); }}>
-            Add New Client
-          </Button>
+          {isDesktop ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button className="">Add Reminder</Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px] bg-white rounded-lg shadow-md">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-semibold text-gray-800">Add Reminder</DialogTitle>
+                </DialogHeader>
+                <AddReminderForm
+                  title={title}
+                  setTitle={setTitle}
+                  date={date}
+                  setDate={setDate}
+                  time={time}
+                  setTime={setTime}
+                  isRecurring={isRecurring}
+                  setIsRecurring={setIsRecurring}
+                  saveReminder={saveReminder}
+                />
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Drawer open={open} onOpenChange={setOpen}>
+              <DrawerTrigger asChild>
+                <Button className="">Add Reminder</Button>
+              </DrawerTrigger>
+              <DrawerContent className="bg-white rounded-lg shadow-md">
+                <DrawerHeader className="text-left">
+                  <DrawerTitle className="text-xl font-semibold text-gray-800">Add Reminder</DrawerTitle>
+                </DrawerHeader>
+                <div className="p-4">
+                  <AddReminderForm
+                    title={title}
+                    setTitle={setTitle}
+                    date={date}
+                    setDate={setDate}
+                    time={time}
+                    setTime={setTime}
+                    isRecurring={isRecurring}
+                    setIsRecurring={setIsRecurring}
+                    saveReminder={saveReminder}
+                  />
+                </div>
+                <DrawerFooter className="pt-2">
+                  <DrawerClose asChild>
+                    <Button variant="outline" className="text-lg">Cancel</Button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
+          )}
         </div>
 
-        <div className="flex flex-grow w-full p-4 space-x-4 overflow-x-auto">
-          <DragDropContext onDragEnd={onDragEnd}>
-            {filteredColumns.map((column) => (
-              <Droppable key={column.name} droppableId={column.name}>
-                {(provided) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className={`flex flex-col ${
-                      expandedColumns.includes(column.name) ? 'w-[240px]' : 'w-[60px]'
-                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-4 rounded-lg shadow-md relative cursor-pointer`}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <h2
-                        className={`text-lg font-semibold truncate text-${column.color}-600`}
-                        onClick={() => toggleColumnExpansion(column.name)}
-                      >
-                        {expandedColumns.includes(column.name) ? column.name : ''}
-                      </h2>
-                      <button
-                        className="text-gray-500"
-                        onClick={() => toggleColumnExpansion(column.name)}
-                      >
-                        {expandedColumns.includes(column.name) ? (
-                          <ChevronLeft />
-                        ) : (
-                          <ChevronRight />
-                        )}
-                      </button>
-                    </div>
-                    {expandedColumns.includes(column.name) ? (
-                      <div className="flex-grow overflow-y-auto pr-2">
-                        {column.clients.map((client, index) => (
-                          <Draggable key={client.id} draggableId={client.id.toString()} index={index}>
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className="mb-2"
-                              >
-                                <Card className="mb-2 ">
-                                  <CardHeader>
-                                    <p className="text-lg font-semibold">{client.client_name}</p>
-                                    <CardDescription>{client.name}</CardDescription>
-                                  </CardHeader>
-                              
-                                  <CardFooter className="flex justify-end space-x-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => { setIsEditMode(true); setSelectedClient(client); }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon">
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>
-                                            Are you sure you want to delete this client?
-                                          </AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>
-                                            Delete
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </CardFooter>
-                                </Card>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="transform -rotate-90 whitespace-nowrap">
-                          <p className={`text-sm font-semibold text-center ${getTextColorClass(column.color)}`}>
-                            {column.name}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Droppable>
-            ))}
-          </DragDropContext>
-        </div>
+        <Tabs defaultValue="upcoming" className="w-full">
+          <TabsList>
+            <TabsTrigger value="upcoming">Upcoming Reminders</TabsTrigger>
+            <TabsTrigger value="completed">Completed Reminders</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="upcoming">
+            <ul className="mt-4">
+              {filteredReminders.map((reminder) => (
+                <CardContent
+                  key={reminder.id}
+                  className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
+                >
+                  <div className="text-gray-900">{reminder.title}</div>
+                  <div className="text-gray-600">{format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}</div>
+                  <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
+                    <TrashIcon className="h-5 w-5 text-red-600" />
+                  </Button>
+                </CardContent>
+              ))}
+            </ul>
+          </TabsContent>
+
+          <TabsContent value="completed">
+            <ul className="mt-4">
+              {completedReminders.map((reminder) => (
+                <CardContent
+                  key={reminder.id}
+                  className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
+                >
+                  <div className="text-gray-900">{reminder.title}</div>
+                  <div className="text-gray-600">{format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}</div>
+                  <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
+                    <TrashIcon className="h-5 w-5 text-red-600" />
+                  </Button>
+                </CardContent>
+              ))}
+            </ul>
+          </TabsContent>
+        </Tabs>
       </Card>
-
-      {/* Add/Edit Client Dialog */}
-      {selectedClient && (
-        <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                placeholder="Client Name"
-                value={selectedClient.client_name || ''}
-                onChange={(e) => setSelectedClient({ ...selectedClient, client_name: e.target.value })}
-              />
-              <Input
-                placeholder="Name"
-                value={selectedClient.name || ''}
-                onChange={(e) => setSelectedClient({ ...selectedClient, name: e.target.value })}
-              />
-              <Input
-                placeholder="Company Name"
-                value={selectedClient.company || ''}
-                onChange={(e) => setSelectedClient({ ...selectedClient, company: e.target.value })}
-              />
-              <Input
-                placeholder="Phone Number"
-                value={selectedClient.phone || ''}
-                onChange={(e) => setSelectedClient({ ...selectedClient, phone: e.target.value })}
-              />
-              <Input
-                placeholder="Location"
-                value={selectedClient.location || ''}
-                onChange={(e) => setSelectedClient({ ...selectedClient, location: e.target.value })}
-              />
-            </div>
-            <div className="mt-4 flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setSelectedClient(null)}>
-                Cancel
-              </Button>
-              <Button onClick={() => handleAddOrUpdateClient(selectedClient)}>
-                {isEditMode ? 'Save Changes' : 'Add Client'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 };
 
-export default Client;
+const AddReminderForm = ({
+  title,
+  setTitle,
+  date,
+  setDate,
+  time,
+  setTime,
+  isRecurring,
+  setIsRecurring,
+  saveReminder,
+}) => {
+  return (
+    <div>
+      <div className="mb-6">
+        <Label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+          Reminder Title
+        </Label>
+        <Input
+          id="title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Enter reminder title"
+          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <div className="mb-6">
+        <Label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+          Date
+        </Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !date && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {date ? format(new Date(date), "PPP") : <span>Pick a date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={date ? new Date(date) : undefined}
+              onSelect={(selectedDate) => {
+                const adjustedDate = new Date(selectedDate);
+                adjustedDate.setHours(12, 0, 0, 0); // Set to noon to avoid time zone issues
+                setDate(adjustedDate.toISOString().split('T')[0]);
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="mb-6">
+        <Label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+          Time
+        </Label>
+        <Input
+          id="time"
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <div className="mb-6 ">
+        <Label htmlFor="recurring" className="block text-sm font-medium text-gray-700 mb-2">
+          Recurring Reminder
+        </Label>
+        <div className="space-x-2 ">
+          <Checkbox
+            id="recurring"
+            checked={isRecurring}
+            onCheckedChange={(checked) => setIsRecurring(checked)}
+          />
+          <span>Repeat Monthly</span>
+        </div>
+      </div>
+
+      <Button onClick={saveReminder} className="mt-4 w-full text-white  rounded-md py-2 transition-colors">
+        Save Reminder
+      </Button>
+    </div>
+  );
+};
+
+export default Remainders;
+
+
 ,
-supabase table :
-create table
-  public.clients (
-    id uuid not null default extensions.uuid_generate_v4 (),
-    name text not null,
-    company text null,
-    phone text null,
-    location text null,
-    status text not null default 'lead'::text,
-    created_at timestamp with time zone not null default now(),
-    updated_at timestamp with time zone not null default now(),
-    client_name text not null,
-    "order" integer null,
-    constraint clients_pkey primary key (id),
-    constraint clients_status_check check (
-      (
-        status = any (
-          array[
-            'lead'::text,
-            'contacted'::text,
-            'proposal'::text,
-            'won'::text,
-            'lost'::text
-          ]
-        )
+NotificationDropdown.jsx : 
+import React, { useState, useEffect } from "react";
+import { Bell } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { format, subDays } from "date-fns";
+import { supabase } from "@/supabase";
+
+const NotificationDropdown = () => {
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    fetchNotifications();
+
+    const notificationsSubscription = supabase
+      .channel("notifications-dropdown") // Unique channel name
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        () => {
+          fetchNotifications();
+        }
       )
-    )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notificationsSubscription);
+    };
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .gte("created_at", subDays(new Date(), 1).toISOString())
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setNotifications(data);
+      setUnreadCount(data.filter((notification) => !notification.read).length);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    const unreadNotifications = notifications.filter((notification) => !notification.read);
+
+    if (unreadNotifications.length > 0) {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ read: true })
+        .in("id", unreadNotifications.map((notification) => notification.id));
+
+      if (error) {
+        console.error("Error marking notifications as read:", error);
+        return;
+      }
+
+      setNotifications((prev) =>
+        prev.map((notification) => ({ ...notification, read: true }))
+      );
+      setUnreadCount(0);
+    }
+  };
+
+  return (
+    <Popover onOpenChange={markAllAsRead}>
+      <PopoverTrigger asChild>
+        <button className="relative hover:text-gray-700">
+          <Bell className="w-6 h-6" />
+          {unreadCount > 0 && (
+            <span className="absolute bottom-5 left-3 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-4 shadow-lg rounded-md bg-white mr-5">
+        <h3 className="font-bold mb-3">Notifications</h3>
+        {notifications.length === 0 ? (
+          <div className="text-gray-600">
+            <p className="mb-1">No notifications</p>
+          </div>
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-auto">
+            {notifications.map((notification) => (
+              <li
+                key={notification.id}
+                className={`p-3 rounded-md flex items-start space-x-3 ${
+                  notification.read ? "bg-gray-100" : "bg-blue-50"
+                } hover:bg-gray-200 transition-colors duration-150`}
+              >
+                <div className="flex-grow">
+                  <p className={`font-semibold ${notification.read ? "text-gray-600" : "text-gray-900"}`}>
+                    {notification.message}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {format(new Date(notification.created_at), "dd/MM/yyyy HH:mm")}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+export default NotificationDropdown;
+,
+AlertNotification.jsx: 
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/supabase";
+import { X as CloseIcon } from "lucide-react";
+import { format, subDays } from "date-fns";
+import notificationSound from "../assets/notification.mp3";
+
+const AlertNotification = () => {
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    fetchNotifications();
+
+    const notificationsSubscription = supabase
+      .channel("notifications-alert") // Unique channel name
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications" }, // Listen only to INSERT events
+        () => {
+          fetchNotifications();
+          playNotificationSound();
+        }
+      )
+      .subscribe();
+
+    // Optional: Handle page visibility
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchNotifications();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      supabase.removeChannel(notificationsSubscription);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Fetch notifications that have not been dismissed
+  const fetchNotifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("dismissed", false)
+        .gte("created_at", subDays(new Date(), 1).toISOString())
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setNotifications(data);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  // Dismiss the alert and update the notification as dismissed in the database
+  const dismissAlert = async (id) => {
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ dismissed: true })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Remove the notification from the state
+      setNotifications((prev) =>
+        prev.filter((notification) => notification.id !== id)
+      );
+    } catch (error) {
+      console.error("Error dismissing alert:", error);
+    }
+  };
+
+  // Play sound when a new notification is triggered
+  const playNotificationSound = () => {
+    const audio = new Audio(notificationSound);
+    audio.play();
+  };
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 space-y-4 max-h-80 overflow-y-auto">
+      {notifications.map((notification, index) => (
+        <div
+          key={notification.id}
+          className="bg-green-100 border border-green-300 text-green-700 p-4 rounded-lg shadow-lg flex justify-between items-center transition-transform transform slide-in"
+          style={{ 
+            animation: `slideIn 0.5s ease-out ${index * 0.1}s`, // Stagger animation by index
+            marginTop: index > 0 ? '8px' : '0' // Slight offset for stacked notifications
+          }}
+        >
+          <div className="flex-1">
+            <p className="font-semibold text-lg">{notification.message}</p>
+            <p className="text-xs text-gray-500">
+              {format(new Date(notification.created_at), "dd/MM/yyyy HH:mm")}
+            </p>
+          </div>
+          <button
+            className="ml-4 p-2 rounded-full hover:bg-blue-200"
+            onClick={() => dismissAlert(notification.id)}
+          >
+            <CloseIcon className="h-5 w-5 text-gray-700" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default AlertNotification;
+
+,
+SUPABASE TABLES :
+create table
+  public.notifications (
+    id uuid not null default extensions.uuid_generate_v4 (),
+    message text not null,
+    read boolean null default false,
+    created_at timestamp with time zone null default now(),
+    reminder_id uuid null,
+    dismissed boolean null default false,
+    constraint notifications_pkey primary key (id),
+    constraint notifications_reminder_id_fkey foreign key (reminder_id) references reminders (id) on delete cascade
   ) tablespace pg_default;
-  ,
-  add a remark text area in the add and edit dialog box
+,create table
+  public.reminders (
+    id uuid not null default extensions.uuid_generate_v4 (),
+    title text not null,
+    date timestamp with time zone not null,
+    completed boolean null default false,
+    is_recurring boolean null default false,
+    recurrence_interval text null default 'none'::text,
+    constraint reminders_pkey primary key (id)
+  ) tablespace pg_default;
+,
+this application is built using React, Shadow DOM, and Supabase. The Remainder.jsx component is utilized for creating reminders, while NotificationDropdown.jsx displays notifications in a dropdown box. A badge appears on the notification icon when a new notification arrives, and clicking the icon updates the 'read' status in the notifications table to true. AlertNotification.jsx functions to display notifications as alerts; when the close icon is clicked, the 'dismissed' status in the database is set to true.
+
+with the current system, the reminders only operate correctly when I open the website, and the notifications are displayed properly. If I close the website, nothing appears in the notification dropdown, and no alert notifications are shown. Is there a method to make this work?
+
+I need to see the notifications in the alert and notification dropdown; for instance, when I close the website and later open my webpage, I should see the notification. The functionality I'm aiming for is such that when I set a reminder using reminders.jsx and then close the browser or my webpage, upon reopening my webpage, the notification should appear in both the notification dropdown and the alert component.
+
+is this behavior occurs because the current system relies solely on client-side logic, which ceases to run when the browser or webpage is closed.should i  need to implement a server-side solution?
+
+
+
+
+
+
+
+,
+

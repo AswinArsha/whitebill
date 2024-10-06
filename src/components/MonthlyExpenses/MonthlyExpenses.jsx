@@ -32,6 +32,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import NotificationDropdown from "../NotificationDropdown";
+import ProfileDropdown from "../ProfileDropdown";
+import AlertNotification from "../AlertNotification";
 
 const TRANSACTION_CATEGORIES = [
   { value: "travel", label: "Travel" },
@@ -254,9 +256,17 @@ const MonthlyExpenses = () => {
 
   return (
     <div>
-       <div className="flex mb-4 justify-between items-center ">
+       <div className="flex  justify-between items-center ">
         <h2 className="text-2xl font-bold ml-2 md:-ml-0">Expenses & Income</h2>
-        <NotificationDropdown />
+        <div className="flex space-x-5 mb-4">
+          <div className="">
+            <ProfileDropdown />
+          </div>
+          <AlertNotification />
+          <NotificationDropdown />
+        </div>
+
+
       </div>
 
       <Card className="shadow-none p-4 mb-4 bg-gray-50">

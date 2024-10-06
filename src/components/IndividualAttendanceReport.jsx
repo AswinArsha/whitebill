@@ -1,21 +1,40 @@
+// IndividualAttendanceReport.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Calendar as CalendarIcon, Clock, UserCheck, AlertTriangle } from "lucide-react";
 import { supabase } from "../supabase";
 import { format, parseISO } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
 
 const IndividualAttendanceReport = () => {
-  const { id } = useParams(); // Get staff_id from route parameters
+  const { id } = useParams(); // Get user_id from route parameters
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return format(now, 'MMMM yyyy');
   });
-  const [staffMember, setStaffMember] = useState(null);
+  const [user, setUser] = useState(null);
   const [attendanceStats, setAttendanceStats] = useState({
     daysPresent: 0,
     daysAbsent: 0,
@@ -30,27 +49,44 @@ const IndividualAttendanceReport = () => {
 
   useEffect(() => {
     if (id) {
-      fetchStaffDetails();
+      fetchUserDetails();
       fetchAttendanceDetails();
     }
   }, [id, selectedMonth]);
 
-  const fetchStaffDetails = async () => {
-    const { data, error } = await supabase
-      .from('staff')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error("Error fetching staff details:", error);
+  const fetchUserDetails = async () => {
+    // Ensure that 'id' is an integer
+    const userId = parseInt(id, 10);
+    if (isNaN(userId)) {
+      console.error("Invalid user ID:", id);
+      setLoading(false);
       return;
     }
 
-    setStaffMember(data);
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user details:", error);
+      setLoading(false);
+      return;
+    }
+
+    setUser(data);
   };
 
   const fetchAttendanceDetails = async () => {
+    // Ensure that 'id' is an integer
+    const userId = parseInt(id, 10);
+    if (isNaN(userId)) {
+      console.error("Invalid user ID:", id);
+      setLoading(false);
+      return;
+    }
+
     const [month, year] = selectedMonth.split(' ');
     const firstDay = new Date(`${month} 1, ${year}`);
     const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
@@ -59,15 +95,16 @@ const IndividualAttendanceReport = () => {
     const { data, error } = await supabase
       .from('attendance')
       .select('date, time')
-      .eq('staff_id', id)
+      .eq('user_id', userId)
       .gte('date', format(firstDay, 'yyyy-MM-dd'))
       .lte('date', format(lastDay, 'yyyy-MM-dd'));
-  
+
     if (error) {
       console.error("Error fetching attendance details:", error);
+      setLoading(false);
       return;
     }
-  
+
     // Organize attendance records by date
     const attendanceMap = {};
     data.forEach(record => {
@@ -77,7 +114,7 @@ const IndividualAttendanceReport = () => {
       }
       attendanceMap[dateStr].push(record.time);
     });
-  
+
     const daysInMonth = lastDay.getDate();
     const tempAttendanceData = [];
     let daysPresent = 0;
@@ -85,28 +122,28 @@ const IndividualAttendanceReport = () => {
     let daysLate = 0;
     let totalCheckInMinutes = 0;
     let checkInCount = 0;
-  
+
     const tempCalendarData = [];
-  
+
     for (let day = 1; day <= daysInMonth; day++) {
       const currentDate = new Date(firstDay.getFullYear(), firstDay.getMonth(), day);
       const dateStr = format(currentDate, 'yyyy-MM-dd');
-  
+
       // Skip future days
       if (currentDate > today) {
         tempCalendarData.push({ date: day, status: 'future' });
         continue;
       }
-  
+
       const records = attendanceMap[dateStr] || [];
       let checkIn = '-';
       let checkOut = '-';
       let status = 'Absent';
-  
+
       if (records.length > 0) {
         checkIn = formatTime(records[0]);
         checkOut = formatTime(records[records.length - 1]);
-  
+
         // If the employee checked in after the office start time, they are late
         if (records[0] <= officeStartTime) {
           status = 'Present';
@@ -114,40 +151,40 @@ const IndividualAttendanceReport = () => {
           status = 'Late';
           daysLate += 1;
         }
-  
+
         daysPresent += 1;  // Increment "Present" for both Present and Late days
-  
+
         const checkInMinutes = convertTimeToMinutes(records[0]);
         totalCheckInMinutes += checkInMinutes;
         checkInCount += 1;
       } else {
         daysAbsent += 1;
       }
-  
+
       tempAttendanceData.push({
         date: dateStr,
         checkIn,
         checkOut,
         status,
       });
-  
+
       tempCalendarData.push({
         date: day,
         status: status.toLowerCase(),
       });
     }
-  
+
     const averageCheckInTime = checkInCount > 0
       ? formatMinutesToTime(Math.round(totalCheckInMinutes / checkInCount))
       : '-';
-  
+
     setAttendanceStats({
       daysPresent,  // Includes both "Present" and "Late" days
       daysAbsent,
       daysLate,
       averageCheckInTime,
     });
-  
+
     setAttendanceData(tempAttendanceData);
     setCalendarData(tempCalendarData);
     setLoading(false); // Set loading to false after fetching data
@@ -156,7 +193,7 @@ const IndividualAttendanceReport = () => {
   const formatTime = (timeStr) => {
     const [hour, minute] = timeStr.split(':');
     const date = new Date();
-    date.setHours(parseInt(hour), parseInt(minute));
+    date.setHours(parseInt(hour, 10), parseInt(minute, 10));
     return format(date, 'hh:mm a');
   };
 
@@ -185,7 +222,7 @@ const IndividualAttendanceReport = () => {
   };
 
   // Conditional check to display skeleton loaders if data is still loading
-  if (loading || !staffMember) {
+  if (loading || !user) {
     return (
       <div className="container mx-auto p-4">
         {/* Skeleton Loader for Header */}
@@ -212,13 +249,13 @@ const IndividualAttendanceReport = () => {
   }
 
   return (
-    <div >
+    <div>
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
         <div>
-          <h1 className="text-xl font-bold">{staffMember.name}</h1>
+          <h1 className="text-xl font-bold">{user.name}</h1>
           <p className="text-muted-foreground">
-            {staffMember.position}, {staffMember.department}
+            {user.position}, {user.department}
           </p>
         </div>
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -306,8 +343,8 @@ const IndividualAttendanceReport = () => {
         </Card>
 
         {/* Attendance Details Table */}
-        <Card >
-          <CardHeader >
+        <Card>
+          <CardHeader>
             <CardTitle>Attendance Details</CardTitle>
           </CardHeader>
           <CardContent className="overflow-auto h-[85%]"> 
