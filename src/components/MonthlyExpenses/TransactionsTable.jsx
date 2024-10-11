@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import dayjs from "dayjs";
 import DownloadButton from "./DownloadButton";
+import { Pencil, Trash } from 'lucide-react'; // Import icons from lucide-react
 
 const TransactionsTable = ({
   transactions,
@@ -30,7 +31,7 @@ const TransactionsTable = ({
   handleDeleteTransaction,
 }) => (
   <Card className="bg-gray-50">
-  <CardHeader className="flex flex-row justify-between items-center ">
+    <CardHeader className="flex flex-row justify-between items-center">
       <div>
         <CardTitle>Transactions</CardTitle>
         <CardDescription>A list of recent transactions.</CardDescription>
@@ -90,16 +91,18 @@ const TransactionsTable = ({
                   <td className="whitespace-nowrap px-4 py-2 text-gray-700">
                     {transaction.description}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                    <div className="space-x-4">
+                  <td className="whitespace-nowrap px-2 py-2 text-gray-700">
+                    <div className="space-x-2 flex">
                       <Button
                         variant="outline"
                         onClick={() => {
                           setCurrentTransaction(transaction);
                           setIsModalOpen(true);
                         }}
+                        className="flex items-center space-x-2"
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" />
+                       
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -109,8 +112,10 @@ const TransactionsTable = ({
                               setTransactionToDelete(transaction.id);
                               setIsAlertOpen(true);
                             }}
+                            className="flex items-center space-x-2"
                           >
-                            Delete
+                            <Trash className="h-4 w-4" />
+                           
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -133,8 +138,11 @@ const TransactionsTable = ({
                               onClick={() =>
                                 handleDeleteTransaction(transaction.id)
                               }
+                      
+                              className="flex items-center space-x-1 bg-red-500 hover:bg-red-400"
                             >
-                              Delete
+                              <Trash className="h-5 w-5 text-white" />
+                             <span> Delete</span>
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -147,7 +155,6 @@ const TransactionsTable = ({
           </table>
         </div>
       </div>
-     
     </CardContent>
   </Card>
 );

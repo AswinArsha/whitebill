@@ -1,3 +1,4 @@
+// TransactionFormDialog.jsx
 import React from "react";
 import {
   Dialog,
@@ -15,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Plus, Save } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import DatePicker from "./DatePicker";
@@ -48,6 +50,7 @@ const TransactionFormDialog = ({
       </DialogHeader>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
+          {/* Title Input */}
           <div>
             <Label htmlFor="title">Title</Label>
             <Input
@@ -61,6 +64,8 @@ const TransactionFormDialog = ({
               }
             />
           </div>
+
+          {/* Amount Input */}
           <div>
             <Label htmlFor="amount">Amount</Label>
             <Input
@@ -75,6 +80,8 @@ const TransactionFormDialog = ({
               }
             />
           </div>
+
+          {/* Description Textarea */}
           <div>
             <Label htmlFor="description">Notes</Label>
             <Textarea
@@ -89,19 +96,23 @@ const TransactionFormDialog = ({
             />
           </div>
         </div>
+
         <div className="space-y-4 -mt-2">
+          {/* Date Picker */}
           <div>
             <Label htmlFor="date">Date</Label>
             <DatePicker
-              selectedDate={currentTransaction?.date || new Date().toISOString()}
+              selectedDate={currentTransaction?.date || new Date()}
               onDateChange={(date) =>
                 setCurrentTransaction({
                   ...currentTransaction,
-                  date: date.toISOString(),
+                  date: date,
                 })
               }
             />
           </div>
+
+          {/* Category Select */}
           <div>
             <Label htmlFor="category">Category</Label>
             <Select
@@ -125,6 +136,8 @@ const TransactionFormDialog = ({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Type Select */}
           <div>
             <Label htmlFor="type">Type</Label>
             <Select
@@ -150,9 +163,24 @@ const TransactionFormDialog = ({
           </div>
         </div>
       </div>
+
+      {/* Dialog Footer */}
       <DialogFooter>
-        <Button onClick={handleAddEditTransaction}>
-          {currentTransaction?.id ? "Update" : "Add"} Transaction
+        <Button
+          onClick={handleAddEditTransaction}
+          className="flex items-center space-x-2"
+        >
+          {currentTransaction?.id ? (
+            <>
+              <Save className="h-5 w-5" />
+              <span>Update Transaction</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-5 w-5" />
+              <span>Add Transaction</span>
+            </>
+          )}
         </Button>
       </DialogFooter>
     </DialogContent>

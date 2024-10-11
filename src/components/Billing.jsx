@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "../supabase"; // Ensure this is correctly initialized for v2
 import { v4 as uuidv4 } from "uuid";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Trash2, EllipsisVertical ,Check  } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, EllipsisVertical ,Check , Eye, Wallet, DollarSign   } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -40,8 +40,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import NotificationDropdown from "./NotificationDropdown";
-import ProfileDropdown from "./ProfileDropdown";
+
 import AlertNotification from "./AlertNotification";
 import {
   Menubar,
@@ -54,7 +53,7 @@ import {
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-const Billing = () => {
+const Billing = ({ role, userId }) => {
   // State for bill items
   const [items, setItems] = useState([
     { description: "Reels", quantity: "", numberOfDays: "", total: "" },
@@ -365,13 +364,13 @@ const handlePaymentDone = async (billId) => {
     <div className="h-2">
       {/* Header Section */}
       <div className="flex justify-between items-center ">
-        <h2 className="text-2xl font-bold ml-2 md:-ml-0">Billing</h2>
+
     <div className="flex space-x-5 mb-4">
           <div className="">
-            <ProfileDropdown />
+     
           </div>
           <AlertNotification />
-          <NotificationDropdown />
+      
         </div>
 
       </div>
@@ -706,52 +705,72 @@ const handlePaymentDone = async (billId) => {
       <TableCell>
         {/* Menubar for Actions */}
         <Menubar>
-          <MenubarMenu>
-            <MenubarTrigger>
-              <EllipsisVertical className="h-4 w-4" />
-            </MenubarTrigger>
-            <MenubarContent>
-              <MenubarItem
-                onSelect={() => {
-                  setViewBill(bill);
-                  setIsViewOpen(true);
-                }}
-              >
-                View
-              </MenubarItem>
-              <MenubarItem onSelect={() => handleDeleteBill(bill.id)}>
-                Delete
-              </MenubarItem>
-              <MenubarSeparator />
-              <MenubarItem
-                onSelect={() => {
-                  setCurrentBillId(bill.id);
-                  setIsPaymentModeOpen(true);
-                }}
-              >
-                Payment Mode
-              </MenubarItem>
-              <MenubarItem
-                onSelect={() => {
-                  setCurrentBillId(bill.id);
-                  setIsBalanceOpen(true);
-                }}
-              >
-                Balance
-              </MenubarItem>
-              <MenubarSeparator />
-              <MenubarItem
-                onSelect={() => handlePaymentDone(bill.id)}
-                className="flex items-center justify-between"
-              >
-                Payment Done
-                {bill.payment_done && (
-                  <Check className="ml-2 h-4 w-4 text-green-500" />
-                )}
-              </MenubarItem>
-            </MenubarContent>
-          </MenubarMenu>
-        </Menubar>
+      <MenubarMenu>
+        <MenubarTrigger>
+          <EllipsisVertical className="h-4 w-4" />
+        </MenubarTrigger>
+        <MenubarContent>
+          {/* View Action */}
+          <MenubarItem
+            onSelect={() => {
+              setViewBill(bill);
+              setIsViewOpen(true);
+            }}
+            className="flex items-center space-x-2"
+          >
+            <Eye className="h-4 w-4" />
+            <span>View</span>
+          </MenubarItem>
+
+          {/* Delete Action */}
+          <MenubarItem
+            onSelect={() => handleDeleteBill(bill.id)}
+            className="flex items-center space-x-2 text-red-500"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+            <span>Delete</span>
+          </MenubarItem>
+
+          <MenubarSeparator />
+
+          {/* Payment Mode Action */}
+          <MenubarItem
+            onSelect={() => {
+              setCurrentBillId(bill.id);
+              setIsPaymentModeOpen(true);
+            }}
+            className="flex items-center space-x-2"
+          >
+            <Wallet className="h-4 w-4" />
+            <span>Payment Mode</span>
+          </MenubarItem>
+
+          {/* Balance Action */}
+          <MenubarItem
+            onSelect={() => {
+              setCurrentBillId(bill.id);
+              setIsBalanceOpen(true);
+            }}
+            className="flex items-center space-x-2"
+          >
+            <DollarSign className="h-4 w-4" />
+            <span>Balance</span>
+          </MenubarItem>
+
+          <MenubarSeparator />
+
+          {/* Payment Done Action */}
+          <MenubarItem
+            onSelect={() => handlePaymentDone(bill.id)}
+            className="flex items-center justify-between space-x-2"
+          >
+            <span>Payment Done</span>
+            {bill.payment_done && <Check className="ml-2 h-4 w-4 text-green-500" />}
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+    </Menubar>
+
       </TableCell>
     </TableRow>
   ))}

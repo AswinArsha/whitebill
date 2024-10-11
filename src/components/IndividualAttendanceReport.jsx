@@ -1,12 +1,7 @@
 // IndividualAttendanceReport.jsx
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -23,23 +18,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, UserCheck, AlertTriangle } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  UserCheck,
+  AlertTriangle,
+} from "lucide-react";
 import { supabase } from "../supabase";
-import { format, parseISO } from 'date-fns';
-import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { format, parseISO } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
+import AlertNotification from "./AlertNotification";
 
-const IndividualAttendanceReport = () => {
+const IndividualAttendanceReport = ({ role, userId }) => {
   const { id } = useParams(); // Get user_id from route parameters
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
-    return format(now, 'MMMM yyyy');
+    return format(now, "MMMM yyyy");
   });
   const [user, setUser] = useState(null);
   const [attendanceStats, setAttendanceStats] = useState({
     daysPresent: 0,
     daysAbsent: 0,
     daysLate: 0,
-    averageCheckInTime: '-',
+    averageCheckInTime: "-",
   });
   const [attendanceData, setAttendanceData] = useState([]);
   const [calendarData, setCalendarData] = useState([]);
@@ -64,9 +65,9 @@ const IndividualAttendanceReport = () => {
     }
 
     const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
+      .from("users")
+      .select("*")
+      .eq("id", userId)
       .single();
 
     if (error) {
@@ -87,17 +88,21 @@ const IndividualAttendanceReport = () => {
       return;
     }
 
-    const [month, year] = selectedMonth.split(' ');
+    const [month, year] = selectedMonth.split(" ");
     const firstDay = new Date(`${month} 1, ${year}`);
-    const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
-    const today = new Date();  // Today's date
-  
+    const lastDay = new Date(
+      firstDay.getFullYear(),
+      firstDay.getMonth() + 1,
+      0
+    );
+    const today = new Date(); // Today's date
+
     const { data, error } = await supabase
-      .from('attendance')
-      .select('date, time')
-      .eq('user_id', userId)
-      .gte('date', format(firstDay, 'yyyy-MM-dd'))
-      .lte('date', format(lastDay, 'yyyy-MM-dd'));
+      .from("attendance")
+      .select("date, time")
+      .eq("user_id", userId)
+      .gte("date", format(firstDay, "yyyy-MM-dd"))
+      .lte("date", format(lastDay, "yyyy-MM-dd"));
 
     if (error) {
       console.error("Error fetching attendance details:", error);
@@ -107,8 +112,8 @@ const IndividualAttendanceReport = () => {
 
     // Organize attendance records by date
     const attendanceMap = {};
-    data.forEach(record => {
-      const dateStr = format(parseISO(record.date), 'yyyy-MM-dd');
+    data.forEach((record) => {
+      const dateStr = format(parseISO(record.date), "yyyy-MM-dd");
       if (!attendanceMap[dateStr]) {
         attendanceMap[dateStr] = [];
       }
@@ -126,19 +131,23 @@ const IndividualAttendanceReport = () => {
     const tempCalendarData = [];
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(firstDay.getFullYear(), firstDay.getMonth(), day);
-      const dateStr = format(currentDate, 'yyyy-MM-dd');
+      const currentDate = new Date(
+        firstDay.getFullYear(),
+        firstDay.getMonth(),
+        day
+      );
+      const dateStr = format(currentDate, "yyyy-MM-dd");
 
       // Skip future days
       if (currentDate > today) {
-        tempCalendarData.push({ date: day, status: 'future' });
+        tempCalendarData.push({ date: day, status: "future" });
         continue;
       }
 
       const records = attendanceMap[dateStr] || [];
-      let checkIn = '-';
-      let checkOut = '-';
-      let status = 'Absent';
+      let checkIn = "-";
+      let checkOut = "-";
+      let status = "Absent";
 
       if (records.length > 0) {
         checkIn = formatTime(records[0]);
@@ -146,13 +155,13 @@ const IndividualAttendanceReport = () => {
 
         // If the employee checked in after the office start time, they are late
         if (records[0] <= officeStartTime) {
-          status = 'Present';
+          status = "Present";
         } else {
-          status = 'Late';
+          status = "Late";
           daysLate += 1;
         }
 
-        daysPresent += 1;  // Increment "Present" for both Present and Late days
+        daysPresent += 1; // Increment "Present" for both Present and Late days
 
         const checkInMinutes = convertTimeToMinutes(records[0]);
         totalCheckInMinutes += checkInMinutes;
@@ -174,12 +183,13 @@ const IndividualAttendanceReport = () => {
       });
     }
 
-    const averageCheckInTime = checkInCount > 0
-      ? formatMinutesToTime(Math.round(totalCheckInMinutes / checkInCount))
-      : '-';
+    const averageCheckInTime =
+      checkInCount > 0
+        ? formatMinutesToTime(Math.round(totalCheckInMinutes / checkInCount))
+        : "-";
 
     setAttendanceStats({
-      daysPresent,  // Includes both "Present" and "Late" days
+      daysPresent, // Includes both "Present" and "Late" days
       daysAbsent,
       daysLate,
       averageCheckInTime,
@@ -191,32 +201,36 @@ const IndividualAttendanceReport = () => {
   };
 
   const formatTime = (timeStr) => {
-    const [hour, minute] = timeStr.split(':');
+    const [hour, minute] = timeStr.split(":");
     const date = new Date();
     date.setHours(parseInt(hour, 10), parseInt(minute, 10));
-    return format(date, 'hh:mm a');
+    return format(date, "hh:mm a");
   };
 
   const convertTimeToMinutes = (timeStr) => {
-    const [hour, minute] = timeStr.split(':').map(Number);
+    const [hour, minute] = timeStr.split(":").map(Number);
     return hour * 60 + minute;
   };
 
   const formatMinutesToTime = (totalMinutes) => {
-    if (isNaN(totalMinutes)) return "-";  // Safeguard for invalid values
+    if (isNaN(totalMinutes)) return "-"; // Safeguard for invalid values
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     const date = new Date();
     date.setHours(hours, minutes);
-    return format(date, 'hh:mm a');
+    return format(date, "hh:mm a");
   };
 
   const generateMonthOptions = () => {
     const options = [];
     const currentDate = new Date();
     for (let i = 0; i < 12; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      options.push(format(date, 'MMMM yyyy'));
+      const date = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() - i,
+        1
+      );
+      options.push(format(date, "MMMM yyyy"));
     }
     return options;
   };
@@ -257,19 +271,24 @@ const IndividualAttendanceReport = () => {
           <p className="text-muted-foreground">
             {user.position}, {user.department}
           </p>
+          <AlertNotification />
+      
+        </div>{" "}
+        <div className="flex items-center justify-end space-x-4">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[180px] mt-4 md:mt-0">
+              <SelectValue placeholder="Select month" />
+            </SelectTrigger>
+            <SelectContent>
+              {generateMonthOptions().map((month) => (
+                <SelectItem key={month} value={month}>
+                  {month}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
         </div>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-[180px] mt-4 md:mt-0">
-            <SelectValue placeholder="Select month" />
-          </SelectTrigger>
-          <SelectContent>
-            {generateMonthOptions().map((month) => (
-              <SelectItem key={month} value={month}>
-                {month}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Attendance Statistics */}
@@ -280,7 +299,9 @@ const IndividualAttendanceReport = () => {
             <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendanceStats.daysPresent}</div>
+            <div className="text-2xl font-bold">
+              {attendanceStats.daysPresent}
+            </div>
           </CardContent>
         </Card>
         <Card className="">
@@ -289,7 +310,9 @@ const IndividualAttendanceReport = () => {
             <AlertTriangle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendanceStats.daysAbsent}</div>
+            <div className="text-2xl font-bold">
+              {attendanceStats.daysAbsent}
+            </div>
           </CardContent>
         </Card>
         <Card className="">
@@ -307,7 +330,9 @@ const IndividualAttendanceReport = () => {
             <CalendarIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendanceStats.averageCheckInTime}</div>
+            <div className="text-2xl font-bold">
+              {attendanceStats.averageCheckInTime}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -321,18 +346,23 @@ const IndividualAttendanceReport = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-2">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="text-center font-medium text-sm">{day}</div>
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div key={day} className="text-center font-medium text-sm">
+                  {day}
+                </div>
               ))}
               {calendarData.map((day, index) => (
-                <div 
+                <div
                   key={index}
                   className={`aspect-square flex items-center justify-center rounded-full text-sm
                     ${
-                      day.status === 'present' ? 'bg-green-100 text-green-800' :
-                      day.status === 'absent' ? 'bg-red-100 text-red-800' :
-                      day.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100'
+                      day.status === "present"
+                        ? "bg-green-100 text-green-800"
+                        : day.status === "absent"
+                        ? "bg-red-100 text-red-800"
+                        : day.status === "late"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-gray-100"
                     }`}
                 >
                   {day.date}
@@ -347,7 +377,7 @@ const IndividualAttendanceReport = () => {
           <CardHeader>
             <CardTitle>Attendance Details</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-auto h-[85%]"> 
+          <CardContent className="overflow-auto h-[85%]">
             <Table className="relative">
               <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
@@ -366,9 +396,11 @@ const IndividualAttendanceReport = () => {
                     <TableCell>
                       <Badge
                         variant={
-                          record.status === 'Present' ? 'default' :
-                          record.status === 'Late' ? 'warning' :
-                          'destructive'
+                          record.status === "Present"
+                            ? "default"
+                            : record.status === "Late"
+                            ? "warning"
+                            : "destructive"
                         }
                       >
                         {record.status}

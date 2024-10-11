@@ -71,7 +71,7 @@ const NotificationDropdown = () => {
     <Popover onOpenChange={markAllAsRead}>
       <PopoverTrigger asChild>
         <button className="relative hover:text-gray-700">
-          <Bell className="w-6 h-6" />
+          <Bell className="w-7 h-7" />
           {unreadCount > 0 && (
             <span className="absolute bottom-5 left-3 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
               {unreadCount}
@@ -79,7 +79,7 @@ const NotificationDropdown = () => {
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-4 shadow-lg rounded-md bg-white mr-5">
+      <PopoverContent   align="end" className="w-80  p-4 shadow-lg rounded-md bg-white -mr-1">
         <h3 className="font-bold mb-3">Notifications</h3>
         {notifications.length === 0 ? (
           <div className="text-gray-600">

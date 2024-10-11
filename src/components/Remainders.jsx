@@ -1,4 +1,4 @@
-
+// Remainders.jsx
 import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,22 +6,46 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/supabase";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { useMediaQuery } from "./hooks/useMediaQuery";
-import NotificationDropdown from "./NotificationDropdown";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Trash2 as TrashIcon } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  Trash2 as TrashIcon,
+  Plus,
+  Check,
+  X,
+} from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AlertNotification from "./AlertNotification";
-import ProfileDropdown from "./ProfileDropdown";
 
-const Remainders = () => {
+import { useToast } from "@/components/ui/use-toast";
+
+// Define the time zone for India
+const timeZone = "Asia/Kolkata";
+
+const Remainders = ({ role, userId }) => {
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(null);
+  const [date, setDate] = useState(new Date()); // Use Date object directly
   const [time, setTime] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [reminders, setReminders] = useState([]);
@@ -29,6 +53,7 @@ const Remainders = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchReminders();
@@ -46,22 +71,56 @@ const Remainders = () => {
   }, []);
 
   const fetchReminders = async () => {
-    const { data, error } = await supabase.from("reminders").select("*").eq("completed", false);
-    if (error) console.error("Error fetching reminders:", error);
-    else setReminders(data);
+    const { data, error } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("completed", false);
+    if (error) {
+      console.error("Error fetching reminders:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load reminders.",
+        variant: "destructive",
+      });
+    } else {
+      setReminders(data);
+    }
 
-    const completedData = await supabase.from("reminders").select("*").eq("completed", true);
-    if (completedData.error) console.error("Error fetching completed reminders:", completedData.error);
-    else setCompletedReminders(completedData.data);
+    const { data: completedData, error: completedError } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("completed", true);
+    if (completedError) {
+      console.error("Error fetching completed reminders:", completedError);
+      toast({
+        title: "Error",
+        description: "Failed to load completed reminders.",
+        variant: "destructive",
+      });
+    } else {
+      setCompletedReminders(completedData);
+    }
   };
 
   const saveReminder = async () => {
     if (!title || !date || !time) {
-      alert("Please fill in all fields.");
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const reminderDateTime = new Date(`${date}T${time}`);
+    // Combine date and time
+    const [hours, minutes] = time.split(":").map(Number);
+    const reminderDate = new Date(date);
+    reminderDate.setHours(hours, minutes, 0, 0);
+
+    // Convert to UTC from the specified time zone
+    const reminderDateTimeString = reminderDate.toLocaleString('en-US', { timeZone });
+    const reminderDateTime = new Date(reminderDateTimeString);
+
     const newReminder = {
       title,
       date: reminderDateTime.toISOString(),
@@ -74,16 +133,31 @@ const Remainders = () => {
 
     if (error) {
       console.error("Error saving reminder:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save reminder.",
+        variant: "destructive",
+      });
       return;
     }
 
     if (data && data.length > 0) {
       setTitle("");
-      setDate(null);
+      setDate(new Date()); // Reset to current date
       setTime("");
       setIsRecurring(false);
+      toast({
+        title: "Success",
+        description: "Reminder added successfully.",
+        variant: "positive",
+      });
     } else {
       console.error("No data returned after insert.");
+      toast({
+        title: "Error",
+        description: "Failed to save reminder.",
+        variant: "destructive",
+      });
     }
     setOpen(false);
   };
@@ -94,7 +168,7 @@ const Remainders = () => {
       try {
         new Notification("Reminder", {
           body: ` ${reminder.title}`,
-          icon: "path/to/icon.png", // Add an icon if needed
+          icon: "/path/to/icon.png", // Add an icon if needed
           tag: reminder.id, // Unique identifier for the notification
         });
       } catch (e) {
@@ -113,24 +187,44 @@ const Remainders = () => {
 
     if (error) {
       console.error("Error saving notification:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save notification.",
+        variant: "destructive",
+      });
       return;
     }
   };
 
   const completeReminder = async (id, reminder) => {
-    const { error } = await supabase.from("reminders").update({ completed: true }).eq("id", id);
+    const { error } = await supabase
+      .from("reminders")
+      .update({ completed: true })
+      .eq("id", id);
 
     if (error) {
       console.error("Error completing reminder:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete reminder.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const completedReminder = reminders.find((r) => r.id === id);
-    setCompletedReminders((prev) => [...prev, completedReminder]);
+    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    setCompletedReminders((prev) => [...prev, { ...reminder, completed: true }]);
+
+    toast({
+      title: "Reminder Completed",
+      description: `${reminder.title} has been marked as completed.`,
+      variant: "positive",
+    });
 
     // If the reminder is recurring, create the next occurrence
     if (reminder.is_recurring && reminder.recurrence_interval === "monthly") {
-      const nextDate = new Date(reminder.date);
+      const reminderDateTime = new Date(reminder.date);
+      const nextDate = new Date(reminderDateTime);
       nextDate.setMonth(nextDate.getMonth() + 1);
 
       const newReminder = {
@@ -141,20 +235,26 @@ const Remainders = () => {
         recurrence_interval: "monthly",
       };
 
-      await supabase.from("reminders").insert([newReminder]);
+      const { data: newData, error: newError } = await supabase
+        .from("reminders")
+        .insert([newReminder]);
+
+      if (newError) {
+        console.error("Error creating recurring reminder:", newError);
+        toast({
+          title: "Error",
+          description: "Failed to create recurring reminder.",
+          variant: "destructive",
+        });
+      } else {
+        setReminders((prev) => [...prev, ...newData]);
+        toast({
+          title: "Recurring Reminder",
+          description: "Next occurrence has been scheduled.",
+          variant: "default",
+        });
+      }
     }
-  };
-
-  const deleteReminder = async (id) => {
-    const { error } = await supabase.from("reminders").delete().eq("id", id);
-
-    if (error) {
-      console.error("Error deleting reminder:", error);
-      return;
-    }
-
-    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
-    setCompletedReminders((prev) => prev.filter((reminder) => reminder.id !== id));
   };
 
   useEffect(() => {
@@ -167,29 +267,68 @@ const Remainders = () => {
           completeReminder(reminder.id, reminder);
         }
       });
-    }, 10000); // Check every 10 seconds
-  
+    }, 1000); // Check every 1 second
+
     return () => clearInterval(interval);
   }, [reminders]);
-  
+
+  const deleteReminder = async (id) => {
+    const { error } = await supabase.from("reminders").delete().eq("id", id);
+
+    if (error) {
+      console.error("Error deleting reminder:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete reminder.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    setCompletedReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+
+    toast({
+      title: "Success",
+      description: "Reminder deleted successfully.",
+      variant: "positive",
+    });
+  };
 
   const filteredReminders = reminders.filter((reminder) =>
     reminder.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredCompletedReminders = completedReminders.filter((reminder) =>
+    reminder.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Custom handler to reset form fields when dialog/drawer is closed
+  const handleOpenChange = (isOpen) => {
+    if (isOpen) {
+      // Reset form fields when the dialog opens
+      setTitle("");
+      setDate(new Date()); // Reset to current date
+      setTime("");
+      setIsRecurring(false);
+    }
+    setOpen(isOpen);
+  };
+  
+
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex mb-4 justify-between items-center">
-        <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Reminders</h2>
-        <div className="flex space-x-5 mb-4">
-          <div className="">
-            <ProfileDropdown />
-          </div>
+      {/* Header Section */}
+      <div className="flex justify-between items-center mb-4">
+        {/* Additional header content if needed */}
+        <div className="flex space-x-5">
           <AlertNotification />
-          <NotificationDropdown />
         </div>
       </div>
+
+      {/* Main Card */}
       <Card className="bg-gray-50 p-6 shadow-none">
+        {/* Search and Add Reminder Button */}
         <div className="flex justify-between mb-6">
           <Input
             type="text"
@@ -199,13 +338,18 @@ const Remainders = () => {
             className="w-full mr-4 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           {isDesktop ? (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={handleOpenChange}>
               <DialogTrigger asChild>
-                <Button className="">Add Reminder</Button>
+                <Button className="flex items-center space-x-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Add Reminder</span>
+                </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] bg-white rounded-lg shadow-md">
+              <DialogContent className="sm:max-w-[400px] bg-white rounded-lg shadow-md">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold text-gray-800">Add Reminder</DialogTitle>
+                  <DialogTitle className="text-xl font-semibold text-gray-800">
+                    Add Reminder
+                  </DialogTitle>
                 </DialogHeader>
                 <AddReminderForm
                   title={title}
@@ -221,13 +365,18 @@ const Remainders = () => {
               </DialogContent>
             </Dialog>
           ) : (
-            <Drawer open={open} onOpenChange={setOpen}>
+            <Drawer open={open} onOpenChange={handleOpenChange}>
               <DrawerTrigger asChild>
-                <Button className="">Add Reminder</Button>
+                <Button className="flex items-center space-x-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Add Reminder</span>
+                </Button>
               </DrawerTrigger>
               <DrawerContent className="bg-white rounded-lg shadow-md">
                 <DrawerHeader className="text-left">
-                  <DrawerTitle className="text-xl font-semibold text-gray-800">Add Reminder</DrawerTitle>
+                  <DrawerTitle className="text-xl font-semibold text-gray-800">
+                    Add Reminder
+                  </DrawerTitle>
                 </DrawerHeader>
                 <div className="p-4">
                   <AddReminderForm
@@ -244,7 +393,10 @@ const Remainders = () => {
                 </div>
                 <DrawerFooter className="pt-2">
                   <DrawerClose asChild>
-                    <Button variant="outline" className="text-lg">Cancel</Button>
+                    <Button variant="outline" className="flex items-center space-x-2">
+                      <X className="h-4 w-4" />
+                      <span>Cancel</span>
+                    </Button>
                   </DrawerClose>
                 </DrawerFooter>
               </DrawerContent>
@@ -252,6 +404,7 @@ const Remainders = () => {
           )}
         </div>
 
+        {/* Tabs for Upcoming and Completed Reminders */}
         <Tabs defaultValue="upcoming" className="w-full">
           <TabsList>
             <TabsTrigger value="upcoming">Upcoming Reminders</TabsTrigger>
@@ -260,35 +413,72 @@ const Remainders = () => {
 
           <TabsContent value="upcoming">
             <ul className="mt-4">
-              {filteredReminders.map((reminder) => (
-                <CardContent
-                  key={reminder.id}
-                  className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
-                >
-                  <div className="text-gray-900">{reminder.title}</div>
-                  <div className="text-gray-600">{format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}</div>
-                  <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
-                    <TrashIcon className="h-5 w-5 text-red-600" />
-                  </Button>
-                </CardContent>
-              ))}
+              {filteredReminders.length > 0 ? (
+                filteredReminders
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map((reminder) => (
+                    <CardContent
+                      key={reminder.id}
+                      className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <Checkbox
+                          checked={reminder.completed}
+                          onCheckedChange={() => completeReminder(reminder.id, reminder)}
+                        />
+                        <div>
+                          <div className="text-gray-900 text-base font-medium">
+                            {reminder.title}
+                          </div>
+                          <div className="text-gray-600 text-xs">
+                            {format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}
+                          </div>
+                          {reminder.is_recurring && (
+                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-[2px] -ml-1 rounded-full">
+                              Recurring Monthly
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
+                        <TrashIcon className="h-5 w-5 text-red-600" />
+                      </Button>
+                    </CardContent>
+                  ))
+              ) : (
+                <p className="text-center text-gray-500">No upcoming reminders found.</p>
+              )}
             </ul>
           </TabsContent>
 
           <TabsContent value="completed">
             <ul className="mt-4">
-              {completedReminders.map((reminder) => (
-                <CardContent
-                  key={reminder.id}
-                  className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
-                >
-                  <div className="text-gray-900">{reminder.title}</div>
-                  <div className="text-gray-600">{format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}</div>
-                  <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
-                    <TrashIcon className="h-5 w-5 text-red-600" />
-                  </Button>
-                </CardContent>
-              ))}
+              {filteredCompletedReminders.length > 0 ? (
+                filteredCompletedReminders
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map((reminder) => (
+                    <CardContent
+                      key={reminder.id}
+                      className="mb-2 p-4 shadow-sm rounded-md flex justify-between items-center bg-white"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <div className="text-gray-900 text-base font-medium line-through">
+                            {reminder.title}
+                          </div>
+                          <div className="text-gray-600 text-xs">
+                            {format(new Date(reminder.date), "dd/MM/yyyy HH:mm")}
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="ghost" onClick={() => deleteReminder(reminder.id)}>
+                        <TrashIcon className="h-5 w-5 text-red-600" />
+                      </Button>
+                    </CardContent>
+                  ))
+              ) : (
+                <p className="text-center text-gray-500">No completed reminders found.</p>
+              )}
             </ul>
           </TabsContent>
         </Tabs>
@@ -310,7 +500,8 @@ const AddReminderForm = ({
 }) => {
   return (
     <div>
-      <div className="mb-6">
+      {/* Reminder Title */}
+      <div className="mb-4">
         <Label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
           Reminder Title
         </Label>
@@ -323,7 +514,8 @@ const AddReminderForm = ({
         />
       </div>
 
-      <div className="mb-6">
+      {/* Date Picker */}
+      <div className="mb-4">
         <Label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
           Date
         </Label>
@@ -337,17 +529,15 @@ const AddReminderForm = ({
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {date ? format(new Date(date), "PPP") : <span>Pick a date</span>}
+              {date ? format(date, "PPP") : <span>Pick a date</span>}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="single"
-              selected={date ? new Date(date) : undefined}
+              selected={date}
               onSelect={(selectedDate) => {
-                const adjustedDate = new Date(selectedDate);
-                adjustedDate.setHours(12, 0, 0, 0); // Set to noon to avoid time zone issues
-                setDate(adjustedDate.toISOString().split('T')[0]);
+                setDate(selectedDate);
               }}
               initialFocus
             />
@@ -355,7 +545,8 @@ const AddReminderForm = ({
         </Popover>
       </div>
 
-      <div className="mb-6">
+      {/* Time Input */}
+      <div className="mb-4">
         <Label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
           Time
         </Label>
@@ -368,27 +559,26 @@ const AddReminderForm = ({
         />
       </div>
 
-      <div className="mb-6 ">
-        <Label htmlFor="recurring" className="block text-sm font-medium text-gray-700 mb-2">
-          Recurring Reminder
+      {/* Recurring Checkbox */}
+      <div className="mb-4 flex items-center">
+        <Checkbox
+          id="recurring"
+          checked={isRecurring}
+          onCheckedChange={(checked) => setIsRecurring(checked)}
+          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <Label htmlFor="recurring" className="ml-2 block text-sm text-gray-700">
+          Repeat Monthly
         </Label>
-        <div className="space-x-2 ">
-          <Checkbox
-            id="recurring"
-            checked={isRecurring}
-            onCheckedChange={(checked) => setIsRecurring(checked)}
-          />
-          <span>Repeat Monthly</span>
-        </div>
       </div>
 
-      <Button onClick={saveReminder} className="mt-4 w-full text-white  rounded-md py-2 transition-colors">
-        Save Reminder
+      {/* Save Button */}
+      <Button onClick={saveReminder} className="flex items-center space-x-2 w-full text-white ">
+        <Check className="h-4 w-4" />
+        <span>Save Reminder</span>
       </Button>
     </div>
   );
 };
 
 export default Remainders;
-
-

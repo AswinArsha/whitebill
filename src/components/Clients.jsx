@@ -1,5 +1,6 @@
+// Client.jsx
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Edit, Trash2, ChevronRight, ChevronLeft, Plus, Check, X } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { supabase } from '../supabase';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,12 +32,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
-import NotificationDropdown from "./NotificationDropdown";
-import ProfileDropdown from "./ProfileDropdown";
+
 import AlertNotification from "./AlertNotification";
 import { Textarea } from "@/components/ui/textarea";
 
-const Client = () => {
+const Client = ({ role, userId }) => {
   const [columns, setColumns] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -180,13 +181,11 @@ const Client = () => {
       setColumns(newColumns);
 
       // Update order in the database
-      if (destinationColumn.name.toLowerCase() === 'proposal') {
-        await updateClientOrder(sourceItems);
-      }
+      await updateClientOrder(sourceItems);
     } else {
       const destinationItems = Array.from(destinationColumn.clients);
-      // Insert at the start of the destination column
-      destinationItems.unshift(removed);
+      // Insert at the destination index
+      destinationItems.splice(destination.index, 0, removed);
 
       const newColumns = [...columns];
       newColumns[sourceColumnIndex].clients = sourceItems;
@@ -206,6 +205,12 @@ const Client = () => {
           description: 'Failed to update client status.',
           variant: 'destructive',
         });
+      } else {
+        toast({
+          title: 'Client Moved',
+          description: `Client moved to ${destination.droppableId}`,
+          variant: 'positive',
+        });
       }
 
       // Update order in the database for both columns
@@ -223,7 +228,8 @@ const Client = () => {
       phone: client.phone,
       location: client.location,
       status: client.status,
-      client_name: client.client_name
+      client_name: client.client_name,
+      remarks: client.remarks,
     }));
 
     const { error } = await supabase
@@ -251,13 +257,14 @@ const Client = () => {
   const filteredColumns = columns.map(column => ({
     ...column,
     clients: column.clients.filter(client =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+      (client.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.client_name || '').toLowerCase().includes(searchTerm.toLowerCase())
     ),
   }));
+
   const getTextColorClass = (color) => {
     switch (color) {
       case 'blue':
@@ -277,48 +284,56 @@ const Client = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex justify-between items-center ">
-        <h2 className="text-2xl font-bold  ml-2 md:-ml-0">Clients</h2>
+      {/* Header Section */}
+      <div className="flex justify-between items-center mb-4">
+       
 
-        <div className="flex space-x-5 mb-4">
-          <div className="">
-            <ProfileDropdown />
-          </div>
+        <div className="flex space-x-5">
+         
           <AlertNotification />
-          <NotificationDropdown />
+
         </div>
-
-
       </div>
 
-      <Card className="flex px-1 pt-4 flex-col w-[1230px] min-h-screen bg-gray-50">
-        <div className="flex px-4 w-[1230px] space-x-4">
+      {/* Main Card */}
+      <Card className="flex flex-col w-full min-h-screen bg-gray-50">
+        {/* Search and Add Button */}
+        <div className="flex flex-col md:flex-row items-start mt-4 md:items-center px-4 py-2 space-y-4 md:space-y-0 md:space-x-4">
           <Input
             placeholder="Search clients"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="mr-4"
+            onKeyUp={() => {}} // Removed handleSearch for simplicity
+            className="flex-grow"
           />
-          <Button onClick={() => { setIsEditMode(false); setSelectedClient({}); }}>
-            Add New Client
+          <Button
+            onClick={() => { setIsEditMode(false); setSelectedClient({ status: 'lead' }); }}
+            className="flex items-center space-x-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Client</span>
           </Button>
         </div>
 
+        {/* Drag and Drop Columns */}
         <div className="flex flex-grow w-full p-4 space-x-4 overflow-x-auto">
           <DragDropContext onDragEnd={onDragEnd}>
             {filteredColumns.map((column) => (
               <Droppable key={column.name} droppableId={column.name}>
-                {(provided) => (
+                {(provided, snapshot) => (
                   <div
                     {...provided.droppableProps}
                     ref={provided.innerRef}
                     className={`flex flex-col ${
                       expandedColumns.includes(column.name) ? 'w-[240px]' : 'w-[60px]'
-                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-4 rounded-lg shadow-md relative cursor-pointer`}
+                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-4 rounded-lg shadow-md relative cursor-pointer ${
+                      snapshot.isDraggingOver ? 'bg-blue-100' : ''
+                    }`}
                   >
+                    {/* Column Header */}
                     <div className="flex justify-between items-center mb-2">
                       <h2
-                        className={`text-lg font-semibold truncate text-${column.color}-600`}
+                        className={`text-lg font-semibold truncate ${getTextColorClass(column.color)}`}
                         onClick={() => toggleColumnExpansion(column.name)}
                       >
                         {expandedColumns.includes(column.name) ? column.name : ''}
@@ -326,6 +341,7 @@ const Client = () => {
                       <button
                         className="text-gray-500"
                         onClick={() => toggleColumnExpansion(column.name)}
+                        aria-label={expandedColumns.includes(column.name) ? 'Collapse Column' : 'Expand Column'}
                       >
                         {expandedColumns.includes(column.name) ? (
                           <ChevronLeft />
@@ -334,35 +350,44 @@ const Client = () => {
                         )}
                       </button>
                     </div>
+
+                    {/* Column Content */}
                     {expandedColumns.includes(column.name) ? (
                       <div className="flex-grow overflow-y-auto pr-2">
                         {column.clients.map((client, index) => (
                           <Draggable key={client.id} draggableId={client.id.toString()} index={index}>
-                            {(provided) => (
+                            {(provided, snapshot) => (
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className="mb-2"
+                                className={`mb-2 ${snapshot.isDragging ? 'opacity-75' : ''}`}
                               >
-                                <Card className="mb-2 ">
+                                <Card className="mb-2">
                                   <CardHeader>
                                     <p className="text-lg font-semibold">{client.client_name}</p>
                                     <CardDescription>{client.name}</CardDescription>
                                   </CardHeader>
-                              
                                   <CardFooter className="flex justify-end space-x-2">
+                                    {/* Edit Button */}
                                     <Button
                                       variant="ghost"
-                                      size="icon"
                                       onClick={() => { setIsEditMode(true); setSelectedClient(client); }}
+                                      className="flex items-center space-x-2"
                                     >
                                       <Edit className="h-4 w-4" />
+                                     
                                     </Button>
+                                    
+                                    {/* Delete Button */}
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon">
+                                        <Button
+                                          variant="ghost"
+                                          className="flex items-center space-x-2 text-red-600 hover:bg-red-100"
+                                        >
                                           <Trash2 className="h-4 w-4" />
+                                          
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
@@ -409,56 +434,100 @@ const Client = () => {
 
       {/* Add/Edit Client Dialog */}
       {selectedClient && (
-    <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4">
-        <Input
-          placeholder="Client Name"
-          value={selectedClient.client_name || ''}
-          onChange={(e) => setSelectedClient({ ...selectedClient, client_name: e.target.value })}
-        />
-        <Input
-          placeholder="Name"
-          value={selectedClient.name || ''}
-          onChange={(e) => setSelectedClient({ ...selectedClient, name: e.target.value })}
-        />
-        <Input
-          placeholder="Company Name"
-          value={selectedClient.company || ''}
-          onChange={(e) => setSelectedClient({ ...selectedClient, company: e.target.value })}
-        />
-        <Input
-          placeholder="Phone Number"
-          value={selectedClient.phone || ''}
-          onChange={(e) => setSelectedClient({ ...selectedClient, phone: e.target.value })}
-        />
-        <Input
-          placeholder="Location"
-          value={selectedClient.location || ''}
-          onChange={(e) => setSelectedClient({ ...selectedClient, location: e.target.value })}
-        />
-        {/* Add the remarks Textarea here */}
-        <Textarea
-          placeholder="Remarks"
-          value={selectedClient.remarks || ''}  // Ensure the `remarks` field is added to your `selectedClient` object
-          onChange={(e) => setSelectedClient({ ...selectedClient, remarks: e.target.value })}
-          rows={4}
-        />
-      </div>
-      <div className="mt-4 flex justify-end space-x-2">
-        <Button variant="outline" onClick={() => setSelectedClient(null)}>
-          Cancel
-        </Button>
-        <Button onClick={() => handleAddOrUpdateClient(selectedClient)}>
-          {isEditMode ? 'Save Changes' : 'Add Client'}
-        </Button>
-      </div>
-    </DialogContent>
-  </Dialog>
-  
+        <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+            </DialogHeader>
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Client Name */}
+              <div>
+                <Label htmlFor="client_name">Client Name</Label>
+                <Input
+                  id="client_name"
+                  placeholder="Client Name"
+                  value={selectedClient.client_name || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, client_name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Name */}
+              <div>
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Name"
+                  value={selectedClient.name || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Company Name */}
+              <div>
+                <Label htmlFor="company">Company Name</Label>
+                <Input
+                  id="company"
+                  placeholder="Company Name"
+                  value={selectedClient.company || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, company: e.target.value })}
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  placeholder="Phone Number"
+                  value={selectedClient.phone || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, phone: e.target.value })}
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  placeholder="Location"
+                  value={selectedClient.location || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, location: e.target.value })}
+                />
+              </div>
+
+              {/* Remarks */}
+              <div className="md:col-span-2">
+                <Label htmlFor="remarks">Remarks</Label>
+                <Textarea
+                  id="remarks"
+                  placeholder="Remarks"
+                  value={selectedClient.remarks || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, remarks: e.target.value })}
+                  rows={4}
+                />
+              </div>
+            </form>
+            <div className="mt-4 flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => setSelectedClient(null)}
+                className="flex items-center space-x-2"
+              >
+                <X className="h-4 w-4" />
+                <span>Cancel</span>
+              </Button>
+              <Button
+                onClick={() => handleAddOrUpdateClient(selectedClient)}
+                className="flex items-center space-x-2"
+              >
+                <Check className="h-4 w-4" />
+                <span>{isEditMode ? 'Save Changes' : 'Add Client'}</span>
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

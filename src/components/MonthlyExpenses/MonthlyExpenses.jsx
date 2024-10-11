@@ -23,6 +23,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, Tooltip } from "recharts";
 import { LabelList, Pie, PieChart } from "recharts";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { Plus, Save } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -31,8 +32,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
-import NotificationDropdown from "../NotificationDropdown";
-import ProfileDropdown from "../ProfileDropdown";
+
 import AlertNotification from "../AlertNotification";
 
 const TRANSACTION_CATEGORIES = [
@@ -65,7 +65,7 @@ const getCategoryColor = (category) => {
   }
 };
 
-const MonthlyExpenses = () => {
+const MonthlyExpenses = ({ role, userId }) => {
   const [transactions, setTransactions] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState(null);
@@ -118,16 +118,22 @@ const MonthlyExpenses = () => {
       currentTransaction.category &&
       currentTransaction.type
     ) {
+      // Ensure date is always set; if not, set it to today's date
+      const transactionDate = currentTransaction.date
+        ? currentTransaction.date
+        : new Date();
+  
       const transactionData = {
         title: currentTransaction.title,
         description: currentTransaction.description,
         amount: currentTransaction.amount,
-        date: currentTransaction.date,
+        date: transactionDate.toISOString().split("T")[0], // Convert to 'YYYY-MM-DD' format
         category: currentTransaction.category,
         type: currentTransaction.type,
       };
-
+  
       if (currentTransaction.id) {
+        // Update existing transaction
         const { error } = await supabase
           .from("transactions")
           .update(transactionData)
@@ -144,6 +150,7 @@ const MonthlyExpenses = () => {
           );
         }
       } else {
+        // Add new transaction
         const { data, error } = await supabase
           .from("transactions")
           .insert([transactionData])
@@ -154,11 +161,12 @@ const MonthlyExpenses = () => {
           setTransactions((current) => [...current, ...data]);
         }
       }
-
+  
       setIsModalOpen(false);
       setCurrentTransaction(null);
     }
   };
+  
 
   const handleDeleteTransaction = async (id) => {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
@@ -257,13 +265,13 @@ const MonthlyExpenses = () => {
   return (
     <div>
        <div className="flex  justify-between items-center ">
-        <h2 className="text-2xl font-bold ml-2 md:-ml-0">Expenses & Income</h2>
+
         <div className="flex space-x-5 mb-4">
           <div className="">
-            <ProfileDropdown />
+         
           </div>
           <AlertNotification />
-          <NotificationDropdown />
+    
         </div>
 
 
@@ -276,8 +284,10 @@ const MonthlyExpenses = () => {
               setCurrentTransaction(null);
               setIsModalOpen(true);
             }}
+            className="flex items-center space-x-2"
           >
-            Add Transaction
+            <Plus className="h-5 w-5" />
+            <span>Add Transaction</span> 
           </Button>
           <Input
             placeholder="Search transactions..."

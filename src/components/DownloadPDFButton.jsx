@@ -1,62 +1,78 @@
+// DownloadPDFButton.jsx
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable"; // Import autoTable plugin for jsPDF
+import { Download } from "lucide-react"; // Import the Download icon
+import { format } from "date-fns";
 
 const DownloadPDFButton = ({ data, selectedMonth }) => {
   const generatePDF = () => {
     const doc = new jsPDF();
 
-    // Check if month is correctly passed
-    const month = selectedMonth || "Unknown Month"; // Fallback if month is undefined
+    // Define the month, fallback to "Unknown Month" if not provided
+    const month = selectedMonth || "Unknown Month";
 
-    // Set font and styling for the title
-    doc.setFontSize(16);
+    // Add Header
+    doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(`Attendance Report for ${month}`, 14, 20);
+    doc.text(`Attendance Report`, 14, 22);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Month: ${month}`, 14, 30);
+    doc.text(`Generated on: ${format(new Date(), "dd/MM/yyyy")}`, 14, 36);
 
-    // Modern and minimalistic styling: use a black background and white font for the table header
+    // Define table headers
     const tableHeaders = [
-      { content: "Name", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255] } },
-      { content: "Days Present", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255] } },
-      { content: "Days Absent", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255] } },
-      { content: "Days Late", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255] } },
-      { content: "Avg. Check-in", styles: { halign: 'center', fillColor: [0, 0, 0], textColor: [255, 255, 255] } },
+      { content: "Name" },
+      { content: "Days Present" },
+      { content: "Days Absent" },
+      { content: "Days Late" },
+      { content: "Avg. Check-in" },
     ];
 
+    // Map data to table rows
     const tableData = data.map((record) => [
-      { content: record.name, styles: { halign: 'center' } },
-      { content: record.daysPresent, styles: { halign: 'center' } },
-      { content: record.daysAbsent, styles: { halign: 'center' } },
-      { content: record.daysLate, styles: { halign: 'center' } },
-      { content: record.averageCheckIn, styles: { halign: 'center' } },
+      record.name,
+      record.daysPresent,
+      record.daysAbsent,
+      record.daysLate,
+      record.averageCheckIn,
     ]);
 
     // Generate the table with autoTable
     autoTable(doc, {
       head: [tableHeaders],
       body: tableData,
-      startY: 30,
-      theme: 'grid',
-      headStyles: {
-        fontSize: 10,
-        fontStyle: 'bold',
-        fillColor: [0, 0, 0], // Black header background
-        textColor: [255, 255, 255], // White text
-        halign: 'center',
-      },
-      bodyStyles: {
-        fontSize: 10,
-        textColor: [0, 0, 0], // Black text
-        halign: 'center',
-      },
+      startY: 45,
+      theme: "striped",
       styles: {
-        lineColor: [240, 240, 240], // Light grid line color
-        lineWidth: 0.5,
+        font: "helvetica",
+        fontSize: 10,
+        halign: "center",
+        valign: "middle",
       },
-      tableLineColor: [240, 240, 240], // Light border color
-      tableLineWidth: 0.5,
-      margin: { top: 30 },
+      headStyles: {
+        fillColor: [52, 73, 94], // Dark Blue Header
+        textColor: [255, 255, 255], // White Text
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245], // Light Grey for Alternate Rows
+      },
+      margin: { top: 45 },
+      didDrawPage: (data) => {
+        // Footer - Page Number
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(10);
+        doc.text(
+          `Page ${data.pageNumber} of ${pageCount}`,
+          data.settings.margin.left,
+          pageHeight - 10
+        );
+      },
     });
 
     // Save the PDF
@@ -64,8 +80,9 @@ const DownloadPDFButton = ({ data, selectedMonth }) => {
   };
 
   return (
-    <Button onClick={generatePDF} className="ml-4">
-      Download PDF
+    <Button onClick={generatePDF} className="ml-4 flex items-center space-x-2">
+      <Download className="h-4 w-4" />
+      <span>Download PDF</span>
     </Button>
   );
 };

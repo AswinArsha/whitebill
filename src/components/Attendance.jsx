@@ -22,10 +22,11 @@ import {
   Clock,
   XCircle,
   MoreVertical,
+  Plus , Eye, Edit, Trash2 ,Save 
 } from "lucide-react";
 import { supabase } from "../supabase";
 import { Input } from "@/components/ui/input";
-import NotificationDropdown from "./NotificationDropdown";
+
 import AlertNotification from "./AlertNotification";
 import {
   format,
@@ -70,11 +71,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import ProfileDropdown from "./ProfileDropdown";
+
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-const Attendance = ({ role }) => {
+const Attendance = ({ role, userId }) => {
   const [attendanceData, setAttendanceData] = useState([]);
   const [totalStaff, setTotalStaff] = useState(0);
   const [present, setPresent] = useState(0);
@@ -108,11 +109,26 @@ const Attendance = ({ role }) => {
   const officeStartTime = "10:00";
   const lateThreshold = "10:10";
 
+  // Debugging: Log role and userId
+  useEffect(() => {
+    console.log("Attendance Component Mounted");
+    console.log("Role:", role);
+    console.log("User ID:", userId);
+  }, [role, userId]);
+
   useEffect(() => {
     fetchAttendanceDataForMonth();
-  }, [selectedMonth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, role, userId]);
 
   const fetchAttendanceDataForMonth = async () => {
+    // Defensive check to ensure userId is defined for regular users
+    if (role === "user" && (userId === null || userId === undefined)) {
+      console.error("User ID is undefined for a regular user.");
+      alert("User ID is undefined. Please log in again.");
+      return;
+    }
+
     const [month, year] = selectedMonth.split(" ");
     const firstDay = startOfMonth(new Date(`${month} 1, ${year}`));
     const lastDay = endOfMonth(firstDay);
@@ -121,20 +137,42 @@ const Attendance = ({ role }) => {
     const daysInMonth = eachDayOfInterval({ start: firstDay, end: lastRelevantDay });
 
     try {
-      // Fetch users who are marked to show in the UI
-      const { data: usersData, error: usersError } = await supabase
+      // Fetch users based on role
+      let usersQuery = supabase
         .from("users")
         .select("*")
         .eq("show", true); // Only fetch users with 'show = true'
+
+      if (role === "user") {
+        usersQuery = usersQuery.eq("id", userId); // Regular users see only themselves
+      }
+
+      const { data: usersData, error: usersError } = await usersQuery;
       if (usersError) throw usersError;
 
-      // Fetch attendance data for the selected month
-      const { data: attendanceData, error: attendanceError } = await supabase
+      if (role === "user" && usersData.length === 0) {
+        console.error("User not found or not authorized.");
+        alert("User not found or not authorized.");
+        return;
+      }
+
+      // Fetch attendance data based on role
+      let attendanceQuery = supabase
         .from("attendance")
         .select("user_id, date, time")
         .gte("date", format(firstDay, "yyyy-MM-dd"))
         .lte("date", format(lastRelevantDay, "yyyy-MM-dd"));
+
+      if (role === "user") {
+        attendanceQuery = attendanceQuery.eq("user_id", userId); // Regular users see only their attendance
+      }
+
+      const { data: attendanceData, error: attendanceError } = await attendanceQuery;
       if (attendanceError) throw attendanceError;
+
+      // Debugging: Log fetched data
+      console.log("Fetched Users Data:", usersData);
+      console.log("Fetched Attendance Data:", attendanceData);
 
       // Create a map of users
       const userMap = usersData.reduce((acc, user) => {
@@ -184,7 +222,7 @@ const Attendance = ({ role }) => {
             userMap[user.id].totalCheckInTime += checkInDecimal;
             userMap[user.id].checkInCount += 1;
 
-            if (isSameDay(day, today)) {
+            if (isSameDay(day, today) && user.id === userId) {
               userMap[user.id].status = status;
               userMap[user.id].checkIn = checkInTime;
               userMap[user.id].checkOut = checkOutTime;
@@ -218,7 +256,7 @@ const Attendance = ({ role }) => {
       const absentCount = userList.filter((user) => user.status === "Absent").length;
 
       setAttendanceData(userList);
-      setTotalStaff(usersData.length);
+      setTotalStaff(role === "admin" ? usersData.length : 1);
       setPresent(presentCount);
       setLate(lateCount);
       setAbsent(absentCount);
@@ -386,63 +424,65 @@ const Attendance = ({ role }) => {
     <div>
       {/* Header */}
       <div className="flex justify-between items-center ">
-        <h1 className="text-2xl font-bold ml-2 md:-ml-0">Attendance Report</h1>
+
         <div className="flex items-center space-x-4">
           <div className="flex space-x-5 mb-4">
-            <ProfileDropdown />
+         
             <AlertNotification />
-            <NotificationDropdown />
+    
           </div>
         </div>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStaff}</div>
-          </CardContent>
-        </Card>
+      {role === "admin" && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalStaff}</div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Present</CardTitle>
-            <UserCheck className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{present}</div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Present</CardTitle>
+              <UserCheck className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{present}</div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Late</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{late}</div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Late</CardTitle>
+              <Clock className="h-4 w-4 text-yellow-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{late}</div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Absent</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{absent}</div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Absent</CardTitle>
+              <XCircle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{absent}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Attendance Details Table */}
-      <Card>
+      <Card className="bg-gray-50">
         <CardHeader>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex  justify-between items-center mb-4">
             <CardTitle>Attendance Details</CardTitle>
             <div className="flex items-center space-x-4">
               {/* Month Selector */}
@@ -460,19 +500,23 @@ const Attendance = ({ role }) => {
               </Select>
 
               {/* Search Input */}
-              <Input
-                id="search"
-                placeholder="Enter user name"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-[200px]"
-              />
+              {role === "admin" && (
+                <Input
+                  id="search"
+                  placeholder="Enter user name"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-[200px]"
+                />
+              )}
 
-              {/* Conditionally render "Add Staff" button for admin */}
               {role === "admin" && (
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline">Add Staff</Button>
+                    <Button variant="outline"  className="flex items-center space-x-2">
+                    <Plus className="h-4 w-4" />
+    <span>Add Staff</span>
+                      </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
@@ -482,7 +526,98 @@ const Attendance = ({ role }) => {
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={(e) => { e.preventDefault(); handleAddStaff(); }}>
-                      {/* Form content */}
+                      {/* Name */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-name" className="block mb-1">
+                          Name
+                        </Label>
+                        <Input
+                          id="new-name"
+                          placeholder="Enter name"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Department */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-department" className="block mb-1">
+                          Department
+                        </Label>
+                        <Input
+                          id="new-department"
+                          placeholder="Enter department"
+                          value={newDepartment}
+                          onChange={(e) => setNewDepartment(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Position */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-position" className="block mb-1">
+                          Position
+                        </Label>
+                        <Input
+                          id="new-position"
+                          placeholder="Enter position"
+                          value={newPosition}
+                          onChange={(e) => setNewPosition(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Username */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-username" className="block mb-1">
+                          Username
+                        </Label>
+                        <Input
+                          id="new-username"
+                          placeholder="Enter username"
+                          value={newUsername}
+                          onChange={(e) => setNewUsername(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Password */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-password" className="block mb-1">
+                          Password
+                        </Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          placeholder="Enter password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Role */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-role" className="block mb-1">
+                          Role
+                        </Label>
+                        <Select value={newRole} onValueChange={setNewRole}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Submit Button */}
+                      <Button type="submit" className="w-full flex items-center space-x-2">
+                      <Plus className="h-4 w-4" />
+    <span>Add Staff</span>
+                        </Button>
                     </form>
                   </DialogContent>
                 </Dialog>
@@ -492,6 +627,8 @@ const Attendance = ({ role }) => {
               <DownloadPDFButton
                 data={filteredAttendanceData}
                 selectedMonth={selectedMonth}
+                role={role}
+                userId={userId}
               />
             </div>
           </div>
@@ -508,7 +645,7 @@ const Attendance = ({ role }) => {
                 <TableHead>Days Absent</TableHead>
                 <TableHead>Days Late</TableHead>
                 <TableHead>Avg Check-in</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>Actions</TableHead> {/* Always render "Actions" header */}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -535,37 +672,41 @@ const Attendance = ({ role }) => {
                   <TableCell className="text-center">{user.daysLate}</TableCell>
                   <TableCell className="text-center">{user.averageCheckIn}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <MoreVertical className="h-5 w-5 cursor-pointer" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem
-                          className="cursor-pointer font-medium"
-                          onClick={() => handleViewReport(user.id)}
-                        >
-                          View
-                        </DropdownMenuItem>
+                  <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <MoreVertical className="h-5 w-5 cursor-pointer" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {/* "View" option visible to all users */}
+        <DropdownMenuItem
+          className="cursor-pointer font-medium flex items-center space-x-2"
+          onClick={() => handleViewReport(user.id)}
+        >
+          <Eye className="h-4 w-4" />
+          <span>View</span>
+        </DropdownMenuItem>
 
-                        {/* Conditionally render "Edit" and "Delete" buttons for admin */}
-                        {role === "admin" && (
-                          <>
-                            <DropdownMenuItem
-                              className="cursor-pointer font-medium"
-                              onClick={() => openEditDialog(user)}
-                            >
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="cursor-pointer font-medium"
-                              onClick={() => openDeleteDialog(user)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+        {/* "Edit" and "Delete" options only visible to admins */}
+        {role === "admin" && (
+          <>
+            <DropdownMenuItem
+              className="cursor-pointer font-medium flex items-center space-x-2"
+              onClick={() => openEditDialog(user)}
+            >
+              <Edit className="h-4 w-4" />
+              <span>Edit</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer font-medium flex items-center space-x-2 text-red-600"
+              onClick={() => openDeleteDialog(user)}
+            >
+              <Trash2 className="h-4 w-4 text-red-600" />
+              <span className="text-red-600">Delete</span>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -574,7 +715,8 @@ const Attendance = ({ role }) => {
         </CardContent>
       </Card>
 
-        {/* Edit Staff Dialog */}
+      {/* Edit Staff Dialog */}
+      {role === "admin" && selectedUser && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -584,108 +726,114 @@ const Attendance = ({ role }) => {
               </DialogDescription>
             </DialogHeader>
 
-            {selectedUser ? (
-              <form onSubmit={(e) => { e.preventDefault(); handleEditStaff(); }}>
-                {/* Name */}
-                <div className="mb-4">
-                  <Label htmlFor="edit-name" className="block mb-1">
-                    Name
-                  </Label>
-                  <Input
-                    id="edit-name"
-                    placeholder="Enter name"
-                    value={selectedUser.name || ""}
-                    onChange={(e) =>
-                      setSelectedUser({ ...selectedUser, name: e.target.value })
-                    }
-                  />
-                </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleEditStaff(); }}>
+              {/* Name */}
+              <div className="mb-4">
+                <Label htmlFor="edit-name" className="block mb-1">
+                  Name
+                </Label>
+                <Input
+                  id="edit-name"
+                  placeholder="Enter name"
+                  value={selectedUser.name || ""}
+                  onChange={(e) =>
+                    setSelectedUser({ ...selectedUser, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
 
-                {/* Department */}
-                <div className="mb-4">
-                  <Label htmlFor="edit-department" className="block mb-1">
-                    Department
-                  </Label>
-                  <Input
-                    id="edit-department"
-                    placeholder="Enter department"
-                    value={selectedUser.department || ""}
-                    onChange={(e) =>
-                      setSelectedUser({ ...selectedUser, department: e.target.value })
-                    }
-                  />
-                </div>
+              {/* Department */}
+              <div className="mb-4">
+                <Label htmlFor="edit-department" className="block mb-1">
+                  Department
+                </Label>
+                <Input
+                  id="edit-department"
+                  placeholder="Enter department"
+                  value={selectedUser.department || ""}
+                  onChange={(e) =>
+                    setSelectedUser({ ...selectedUser, department: e.target.value })
+                  }
+                  required
+                />
+              </div>
 
-                {/* Position */}
-                <div className="mb-4">
-                  <Label htmlFor="edit-position" className="block mb-1">
-                    Position
-                  </Label>
-                  <Input
-                    id="edit-position"
-                    placeholder="Enter position"
-                    value={selectedUser.position || ""}
-                    onChange={(e) =>
-                      setSelectedUser({ ...selectedUser, position: e.target.value })
-                    }
-                  />
-                </div>
+              {/* Position */}
+              <div className="mb-4">
+                <Label htmlFor="edit-position" className="block mb-1">
+                  Position
+                </Label>
+                <Input
+                  id="edit-position"
+                  placeholder="Enter position"
+                  value={selectedUser.position || ""}
+                  onChange={(e) =>
+                    setSelectedUser({ ...selectedUser, position: e.target.value })
+                  }
+                  required
+                />
+              </div>
 
-                {/* Username */}
-                <div className="mb-4">
-                  <Label htmlFor="edit-username" className="block mb-1">
-                    Username
-                  </Label>
-                  <Input
-                    id="edit-username"
-                    placeholder="Enter username"
-                    value={selectedUser.username || ""}
-                    onChange={(e) =>
-                      setSelectedUser({ ...selectedUser, username: e.target.value })
-                    }
-                  />
-                </div>
+              {/* Username */}
+              <div className="mb-4">
+                <Label htmlFor="edit-username" className="block mb-1">
+                  Username
+                </Label>
+                <Input
+                  id="edit-username"
+                  placeholder="Enter username"
+                  value={selectedUser.username || ""}
+                  onChange={(e) =>
+                    setSelectedUser({ ...selectedUser, username: e.target.value })
+                  }
+                  required
+                />
+              </div>
 
-                {/* Password */}
-                <div className="mb-4">
-                  <Label htmlFor="edit-password" className="block mb-1">
-                    Password
-                  </Label>
-                  <Input
-                    id="edit-password"
-                    type="password"
-                    placeholder="Enter new password"
-                    value={selectedUser.password || ""}
-                    onChange={(e) =>
-                      setSelectedUser({ ...selectedUser, password: e.target.value })
-                    }
-                  />
-                </div>
+              {/* Password */}
+              <div className="mb-4">
+                <Label htmlFor="edit-password" className="block mb-1">
+                  Password
+                </Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  placeholder="Enter new password"
+                  value={selectedUser.password || ""}
+                  onChange={(e) =>
+                    setSelectedUser({ ...selectedUser, password: e.target.value })
+                  }
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave blank to keep existing password.</p>
+              </div>
 
-                {/* Role Switch */}
-                <div className="flex items-center mb-4">
-                  <Switch
-                    id="edit-role-switch"
-                    checked={selectedUser.role === "admin"}
-                    onCheckedChange={(checked) =>
-                      setSelectedUser({ ...selectedUser, role: checked ? "admin" : "user" })
-                    }
-                  />
-                  <Label htmlFor="edit-role-switch" className="ml-2">
-                    {selectedUser.role === "admin" ? "Admin" : "User"}
-                  </Label>
-                </div>
+              {/* Role Switch */}
+              <div className="flex items-center mb-4">
+                <Switch
+                  id="edit-role-switch"
+                  checked={selectedUser.role === "admin"}
+                  onCheckedChange={(checked) =>
+                    setSelectedUser({ ...selectedUser, role: checked ? "admin" : "user" })
+                  }
+                />
+                <Label htmlFor="edit-role-switch" className="ml-2">
+                  {selectedUser.role === "admin" ? "Admin" : "User"}
+                </Label>
+              </div>
 
-                {/* Save Button */}
-                <Button className="w-full" type="submit">Save</Button>
-              </form>
-            ) : (
-              <div>Loading...</div> // Show loading indicator while fetching data
-            )}
+              {/* Save Button */}
+              <Button className="w-full flex items-center justify-center space-x-2" type="submit">
+  <Save className="h-4 w-4" />
+  <span>Save</span>
+</Button>
+            </form>
           </DialogContent>
         </Dialog>
+      )}
 
-        {/* Delete Staff Alert Dialog */}
+      {/* Delete Staff Alert Dialog */}
+      {role === "admin" && selectedUser && (
         <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -699,14 +847,16 @@ const Attendance = ({ role }) => {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-red-500" onClick={handleDeleteStaff}>
-                Delete
+              <AlertDialogAction className="bg-red-500 flex items-center space-x-2 hover:bg-red-400" onClick={handleDeleteStaff}>
+              <Trash2 className="h-4 w-4 text-white" />
+              <span className="text-white">Delete</span>
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    );
-  };
+      )}
+    </div>
+  );
+};
 
-  export default Attendance;
+export default Attendance;

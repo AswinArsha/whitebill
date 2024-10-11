@@ -2,6 +2,8 @@ import React, { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import ReactToPrint from "react-to-print";
 import Logo from "@/assets/logo1.png";
+import { Printer } from 'lucide-react';
+
 
 const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientDetails }) => {
   const componentRef = useRef();
@@ -14,9 +16,12 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
     <div>
       <ReactToPrint
         trigger={() => (
-          <Button className="mt-4 w-full text-white rounded-md py-2 transition-colors">
-            Print Invoice
+          <Button className="mt-4 w-full text-white flex items-center space-x-2 rounded-md py-2 transition-colors">
+        <Printer className="h-5 w-5 text-white" /> {/* Icon */}
+<span>Print Invoice</span>
           </Button>
+
+
         )}
         content={() => componentRef.current}
         onBeforeGetContent={handlePrint}
