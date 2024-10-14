@@ -49,20 +49,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Menu ,Trash2, Plus, Save , Printer} from "lucide-react";
+import { Check, ChevronsUpDown, Menu, Trash2, Plus, Save, Printer } from "lucide-react";
 
 import AlertNotification from "./AlertNotification";
 import jsPDF from "jspdf";
-
 
 const CATEGORIES = [
   { value: "shoot", label: "Shoot" },
   { value: "meeting", label: "Meeting" },
   { value: "post", label: "Post" },
   { value: "editing", label: "Editing" },
+  { value: "ad_campaign", label: "Ad Campaign" }, // New Category
 ];
 
-const FILTER_CATEGORIES = [{ value: "all", label: "Filter by  Category" }, ...CATEGORIES];
+const FILTER_CATEGORIES = [{ value: "all", label: "Filter by Category" }, ...CATEGORIES];
 
 const getCategoryColor = (category, isDone) => {
   if (isDone) return "#4caf50";
@@ -75,12 +75,15 @@ const getCategoryColor = (category, isDone) => {
       return "#f48c06";
     case "editing":
       return "#9d4edd";
+    case "ad_campaign":
+      return "#ad2831"; // Color for Ad Campaign
     default:
       return "#6c757d";
   }
 };
 
 const CalendarSection = ({ role, userId }) => {
+  // Existing state variables
   const [events, setEvents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -94,24 +97,25 @@ const CalendarSection = ({ role, userId }) => {
     allDay: false,
     isDone: false,
     clientName: "",
-    assignedUserIds: [], // For assigning to multiple users
+    assignedUserIds: [],
   });
   const [mode, setMode] = useState(null); // 'add', 'edit', 'view'
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterClientName, setFilterClientName] = useState("");
+  const [filterAssignedUser, setFilterAssignedUser] = useState("all");
   const [isPrinting, setIsPrinting] = useState(false);
   const [errors, setErrors] = useState({ title: "", category: "" });
   const [clients, setClients] = useState([]);
-  const [users, setUsers] = useState([]); // For assigning to users
+  const [users, setUsers] = useState([]);
   const [openFilterClientCombobox, setOpenFilterClientCombobox] = useState(false);
   const [openDialogClientCombobox, setOpenDialogClientCombobox] = useState(false);
   const [openDialogAssignCombobox, setOpenDialogAssignCombobox] = useState(false);
   const calendarRef = useRef(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date()); // Track the displayed month
-  const [showFilters, setShowFilters] = useState(false); // State for mobile filter toggle
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch clients and users for assignment
+  // Fetch clients and users (unchanged)
   const fetchClients = async () => {
     const { data, error } = await supabase
       .from("clients")
@@ -140,7 +144,7 @@ const CalendarSection = ({ role, userId }) => {
     } else {
       setUsers(
         data.map((user) => ({
-          value: Number(user.id), // Convert to number
+          value: Number(user.id),
           label: user.name,
         }))
       );
@@ -155,6 +159,7 @@ const CalendarSection = ({ role, userId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
+  // Fetch events (unchanged)
   const fetchEvents = useCallback(async () => {
     let query = supabase.from("events").select("*");
 
@@ -176,6 +181,10 @@ const CalendarSection = ({ role, userId }) => {
       query = query.eq("client_name", filterClientName);
     }
 
+    if (filterAssignedUser && filterAssignedUser !== "all") {
+      query = query.contains("assigned_user_ids", [Number(filterAssignedUser)]);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -195,7 +204,7 @@ const CalendarSection = ({ role, userId }) => {
           category: event.category,
           isDone: event.is_done,
           clientName: event.client_name,
-          assignedUserIds: (event.assigned_user_ids || []).map(id => Number(id)),
+          assignedUserIds: (event.assigned_user_ids || []).map((id) => Number(id)),
         },
       }));
       setEvents(formattedEvents);
@@ -206,17 +215,17 @@ const CalendarSection = ({ role, userId }) => {
     searchTerm,
     filterCategory,
     filterClientName,
-    // Removed filterAssignedUserIds since it's no longer used
+    filterAssignedUser,
   ]);
 
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
 
+  // Handle opening the dialog for adding an event
   const handleDateSelect = (selectInfo) => {
-    if (role !== "admin") return; // Only admins can add events
-    setMode('add');
-    setIsModalOpen(true);
+    if (role !== "admin") return;
+    setMode("add");
     setNewEvent({
       id: "",
       title: "",
@@ -230,15 +239,16 @@ const CalendarSection = ({ role, userId }) => {
       clientName: "",
       assignedUserIds: [],
     });
+    setIsModalOpen(true);
   };
 
+  // Handle opening the dialog for editing/viewing an event
   const handleEventClick = (clickInfo) => {
     if (role === "admin") {
-      setMode('edit');
+      setMode("edit");
     } else {
-      setMode('view');
+      setMode("view");
     }
-    setIsModalOpen(true);
     setNewEvent({
       id: clickInfo.event.id,
       title: clickInfo.event.title,
@@ -250,10 +260,13 @@ const CalendarSection = ({ role, userId }) => {
       allDay: clickInfo.event.allDay,
       isDone: clickInfo.event.extendedProps.isDone,
       clientName: clickInfo.event.extendedProps.clientName,
-      assignedUserIds: (clickInfo.event.extendedProps.assignedUserIds || []).map(id => Number(id)),
+      assignedUserIds: (clickInfo.event.extendedProps.assignedUserIds || []).map(
+        (id) => Number(id)
+      ),
     });
+    setIsModalOpen(true);
   };
-
+  // Validation and event handlers remain unchanged
   const validateEvent = () => {
     let isValid = true;
     const newErrors = { title: "", category: "" };
@@ -271,6 +284,7 @@ const CalendarSection = ({ role, userId }) => {
     setErrors(newErrors);
     return isValid;
   };
+
 
   const handleEventAddOrUpdate = async () => {
     if (mode === 'edit' || mode === 'add') {
@@ -546,7 +560,7 @@ const CalendarSection = ({ role, userId }) => {
       .eq("id", updatedEvent.id);
 
     if (error) {
-      console.error("Error updating event:", error);
+      console.error("Error updating event resizing:", error);
       alert("Failed to resize event. Please try again.");
     } else {
       setEvents((currentEvents) =>
@@ -691,7 +705,7 @@ const CalendarSection = ({ role, userId }) => {
       doc.rect(startX + index * cellWidth, startY - 10, cellWidth, 10, "F"); // Fill rectangle with color
       doc.setFontSize(dayLabelFontSize);
 
-      doc.text(day, startX + index * cellWidth + 12, startY - 2, {
+      doc.text(day, startX + index * cellWidth + cellWidth / 2, startY - 2, {
         align: "center",
       });
     });
@@ -707,6 +721,7 @@ const CalendarSection = ({ role, userId }) => {
       // Draw empty cell
       doc.setFillColor("#FFFFFF"); // Empty cell background
       doc.rect(x, y, cellWidth, cellHeight);
+
       doc.setDrawColor(gridLineColor);
       doc.setLineWidth(0.1);
       doc.rect(x, y, cellWidth, cellHeight);
@@ -744,8 +759,7 @@ const CalendarSection = ({ role, userId }) => {
       // Display events as plain text
       doc.setFontSize(eventFontSize);
       dayEvents.forEach((event, index) => {
-        if (index < 2) {
-          // Limit to 2 events per day for clarity
+        if (index < 2) { // Limit to 2 events per day for clarity
           doc.text(event.title, x + 4, y + 14 + index * 6, {
             maxWidth: cellWidth - 8,
           });
@@ -765,6 +779,7 @@ const CalendarSection = ({ role, userId }) => {
         // Draw empty cell
         doc.setFillColor("#FFFFFF"); // Empty cell background
         doc.rect(x, y, cellWidth, cellHeight);
+
         doc.setDrawColor(gridLineColor);
         doc.setLineWidth(0.1);
         doc.rect(x, y, cellWidth, cellHeight);
@@ -779,7 +794,6 @@ const CalendarSection = ({ role, userId }) => {
     generateEnhancedCalendarPDF();
   }, [filterClientName, events, currentMonth]);
 
-  // Track month change in FullCalendar
   const handleMonthChange = (arg) => {
     setCurrentMonth(arg.view.currentStart);
   };
@@ -787,20 +801,39 @@ const CalendarSection = ({ role, userId }) => {
   useEffect(() => {
     if (isPrinting) {
       triggerPrint();
+      setIsPrinting(false);
     }
   }, [isPrinting, triggerPrint]);
+
+  // Centralized function to close the dialog and reset state
+  const handleCloseDialog = () => {
+    setIsModalOpen(false);
+    setMode(null);
+    setNewEvent({
+      id: "",
+      title: "",
+      description: "",
+      start: "",
+      end: "",
+      location: "",
+      category: "",
+      allDay: false,
+      isDone: false,
+      clientName: "",
+      assignedUserIds: [],
+    });
+    setErrors({ title: "", category: "" });
+  };
 
   return (
     <div>
       {/* Header */}
       <div className="flex justify-between items-center ">
-
         <div className="flex space-x-5 mb-4">
           <div>
-
+            {/* Additional header content if needed */}
           </div>
           <AlertNotification />
-  
         </div>
       </div>
       <Card className="bg-gray-50 p-4">
@@ -809,6 +842,7 @@ const CalendarSection = ({ role, userId }) => {
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
+            type="button"
           >
             <Menu className="w-6 h-6" />
           </Button>
@@ -820,6 +854,7 @@ const CalendarSection = ({ role, userId }) => {
             showFilters ? "block" : "hidden"
           } md:block`}
         >
+          {/* Search Input */}
           <Input
             placeholder="Search events..."
             value={searchTerm}
@@ -828,6 +863,7 @@ const CalendarSection = ({ role, userId }) => {
             className="mb-2 md:mb-0"
           />
 
+          {/* Category Filter */}
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger>
               <SelectValue placeholder="All Categories" />
@@ -840,6 +876,8 @@ const CalendarSection = ({ role, userId }) => {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Client Name Filter */}
           <Popover
             open={openFilterClientCombobox}
             onOpenChange={setOpenFilterClientCombobox}
@@ -850,6 +888,7 @@ const CalendarSection = ({ role, userId }) => {
                 role="combobox"
                 aria-expanded={openFilterClientCombobox}
                 className="w-full justify-between"
+                type="button"
               >
                 {filterClientName || "Filter by Client"}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -872,7 +911,7 @@ const CalendarSection = ({ role, userId }) => {
                               : currentValue
                           );
                           setOpenFilterClientCombobox(false);
-                          fetchEvents(); // Refetch events when filter changes
+                          // Removed manual fetchEvents call
                         }}
                       >
                         <Check
@@ -891,396 +930,420 @@ const CalendarSection = ({ role, userId }) => {
               </Command>
             </PopoverContent>
           </Popover>
-                 {/* Download PDF Button */}
-        {role === "admin" && (
-         <div className="flex justify-end mb-4">
-         <Button onClick={triggerPrint} className="flex items-center space-x-2">
-           <Printer className="h-5 w-5 text-white" /> {/* Icon */}
-           <span>Print Calendar</span>
-         </Button>
-       </div>
-        )}
-        </div>
 
-{/* Add/Edit/View Event Dialog */}
-<Dialog
-  open={isModalOpen}
-  onOpenChange={(open) => {
-    setIsModalOpen(open);
-    if (!open) {
-      setMode(null);
-      setNewEvent({
-        id: "",
-        title: "",
-        description: "",
-        start: "",
-        end: "",
-        location: "",
-        category: "",
-        allDay: false,
-        isDone: false,
-        clientName: "",
-        assignedUserIds: [],
-      });
-      setErrors({ title: "", category: "" });
-    }
-  }}
->
-  <DialogContent className="max-w-3xl p-6 bg-white rounded-lg shadow-lg">
-    <DialogHeader>
-      <DialogTitle className="text-2xl font-semibold mb-2">
-        {mode === 'edit' ? "Edit Event" : mode === 'add' ? "Add New Event" : "View Event"}
-      </DialogTitle>
-      <DialogDescription className="text-gray-600">
-        {mode === 'edit'
-          ? "Update the details of the event."
-          : mode === 'add'
-          ? "Fill in the details of the new event."
-          : "View the details of the event and mark it as done."}
-      </DialogDescription>
-    </DialogHeader>
-
-    <form className="space-y-6">
-      {/* Event Details */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Event Title */}
-        <div>
-          <Label htmlFor="title" className="block text-sm font-medium text-gray-700">
-            Event Title
-          </Label>
-          {mode === 'view' ? (
-            <Input
-              id="title"
-              value={newEvent.title}
-              readOnly
-              className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-            />
-          ) : (
-            <Input
-              id="title"
-              value={newEvent.title}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, title: e.target.value })
-              }
-              required
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          )}
-          {errors.title && (
-            <p className="mt-1 text-sm text-red-600">{errors.title}</p>
-          )}
-        </div>
-
-        {/* Client Name */}
-        <div>
-          <Label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
-            Client Name
-          </Label>
-          {mode === 'view' ? (
-            <Input
-              id="clientName"
-              value={newEvent.clientName}
-              readOnly
-              className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-            />
-          ) : (
-            <Popover
-              open={openDialogClientCombobox}
-              onOpenChange={setOpenDialogClientCombobox}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openDialogClientCombobox}
-                  className="mt-1 w-full justify-between"
-                >
-                  {newEvent.clientName || "Select a client"}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput placeholder="Search clients..." />
-                  <CommandList>
-                    <CommandEmpty>No client found.</CommandEmpty>
-                    <CommandGroup>
-                      {clients.map((client) => (
-                        <CommandItem
-                          key={client.value}
-                          value={client.value}
-                          onSelect={(currentValue) => {
-                            setNewEvent({
-                              ...newEvent,
-                              clientName: currentValue,
-                            });
-                            setOpenDialogClientCombobox(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              newEvent.clientName === client.value
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          {client.label}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-      </div>
-
-      {/* Remarks and Location */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Remarks */}
-        <div>
-          <Label htmlFor="description" className="block text-sm font-medium text-gray-700">
-            Remarks
-          </Label>
-          {mode === 'view' ? (
-            <Textarea
-              id="description"
-              value={newEvent.description}
-              readOnly
-              className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-            />
-          ) : (
-            <Textarea
-              id="description"
-              value={newEvent.description}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, description: e.target.value })
-              }
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          )}
-        </div>
-
-        {/* Location */}
-        <div>
-          <Label htmlFor="location" className="block text-sm font-medium text-gray-700">
-            Location
-          </Label>
-          {mode === 'view' ? (
-            <Input
-              id="location"
-              value={newEvent.location}
-              readOnly
-              className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-            />
-          ) : (
-            <Input
-              id="location"
-              value={newEvent.location}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, location: e.target.value })
-              }
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Category and Assign To */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Category */}
-        <div>
-          <Label htmlFor="category" className="block text-sm font-medium text-gray-700">
-            Category
-          </Label>
-          {mode === 'view' ? (
-            <Input
-              id="category"
-              value={newEvent.category}
-              readOnly
-              className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-            />
-          ) : (
+          {/* Assigned User Filter (Admin Only) */}
+          {role === "admin" && (
             <Select
-              value={newEvent.category}
-              onValueChange={(value) =>
-                setNewEvent({ ...newEvent, category: value })
-              }
-              required
-              className="mt-1"
+              value={filterAssignedUser}
+              onValueChange={setFilterAssignedUser}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a category" />
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by Assigned User" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
+                <SelectItem value="all">All Users</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.value} value={String(user.value)}>
+                    {user.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          {errors.category && (
-            <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+
+          {/* Download PDF Button */}
+          {role === "admin" && (
+            <div className="flex justify-end mb-4">
+              <Button
+                onClick={() => setIsPrinting(true)}
+                className="flex items-center space-x-2"
+                type="button"
+              >
+                <Printer className="h-5 w-5 text-white" />
+                <span>Print Calendar</span>
+              </Button>
+            </div>
           )}
         </div>
 
-        {/* Assign To (Admin Only) */}
-        {role === "admin" && mode !== 'view' && (
-          <div>
-            <Label htmlFor="assignTo" className="block text-sm font-medium text-gray-700">
-              Assign To
-            </Label>
-            <Popover
-              open={openDialogAssignCombobox}
-              onOpenChange={setOpenDialogAssignCombobox}
-            >
-              <PopoverTrigger asChild>
+        {/* Conditionally Render the Dialog */}
+        {isModalOpen && (
+      <Dialog open={isModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleCloseDialog();
+        }
+      }}>
+            <DialogContent className="max-w-3xl p-6 bg-white rounded-lg shadow-lg">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-semibold mb-2">
+                  {mode === "edit"
+                    ? "Edit Event"
+                    : mode === "add"
+                    ? "Add New Event"
+                    : "View Event"}
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
+                  {mode === "edit"
+                    ? "Update the details of the event."
+                    : mode === "add"
+                    ? "Fill in the details of the new event."
+                    : "View the details of the event and mark it as done."}
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Dialog Form */}
+              <div className="space-y-6">
+                {/* Event Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Event Title */}
+                  <div>
+                    <Label
+                      htmlFor="title"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Event Title
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="title"
+                        value={newEvent.title}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Input
+                        id="title"
+                        value={newEvent.title}
+                        onChange={(e) =>
+                          setNewEvent({ ...newEvent, title: e.target.value })
+                        }
+                        required
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                    {errors.title && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.title}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Client Name */}
+                  <div>
+                    <Label
+                      htmlFor="clientName"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Client Name
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="clientName"
+                        value={newEvent.clientName}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.clientName}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, clientName: value })
+                        }
+                        required
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map((client) => (
+                            <SelectItem
+                              key={client.value}
+                              value={client.value}
+                            >
+                              {client.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remarks and Location */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Remarks */}
+                  <div>
+                    <Label
+                      htmlFor="description"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Remarks
+                    </Label>
+                    {mode === "view" ? (
+                      <Textarea
+                        id="description"
+                        value={newEvent.description}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Textarea
+                        id="description"
+                        value={newEvent.description}
+                        onChange={(e) =>
+                          setNewEvent({
+                            ...newEvent,
+                            description: e.target.value,
+                          })
+                        }
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <Label
+                      htmlFor="location"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Location
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="location"
+                        value={newEvent.location}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Input
+                        id="location"
+                        value={newEvent.location}
+                        onChange={(e) =>
+                          setNewEvent({
+                            ...newEvent,
+                            location: e.target.value,
+                          })
+                        }
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Category and Assign To */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Category */}
+                  <div>
+                    <Label
+                      htmlFor="category"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Category
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="category"
+                        value={newEvent.category}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.category}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, category: value })
+                        }
+                        required
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((category) => (
+                            <SelectItem
+                              key={category.value}
+                              value={category.value}
+                            >
+                              {category.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {errors.category && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.category}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Assign To (Admin Only) */}
+                  {role === "admin" && mode !== "view" && (
+                    <div>
+                      <Label
+                        htmlFor="assignTo"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Assign To
+                      </Label>
+                      <Popover
+                        open={openDialogAssignCombobox}
+                        onOpenChange={setOpenDialogAssignCombobox}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openDialogAssignCombobox}
+                            className="mt-1 w-full justify-between"
+                            type="button"
+                          >
+                            {newEvent.assignedUserIds.length > 0
+                              ? users
+                                  .filter((user) =>
+                                    newEvent.assignedUserIds.includes(user.value)
+                                  )
+                                  .map((user) => user.label)
+                                  .join(", ")
+                              : "Assign to Users"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0">
+                          <Command>
+                            <CommandInput placeholder="Search users..." />
+                            <CommandList>
+                              <CommandEmpty>No user found.</CommandEmpty>
+                              <CommandGroup>
+                                {users.map((user) => (
+                                  <CommandItem
+                                    key={user.value}
+                                    value={String(user.value)}
+                                    onSelect={(currentValue) => {
+                                      const numericValue = Number(currentValue);
+                                      if (
+                                        newEvent.assignedUserIds.includes(
+                                          numericValue
+                                        )
+                                      ) {
+                                        setNewEvent({
+                                          ...newEvent,
+                                          assignedUserIds:
+                                            newEvent.assignedUserIds.filter(
+                                              (id) => id !== numericValue
+                                            ),
+                                        });
+                                      } else {
+                                        setNewEvent({
+                                          ...newEvent,
+                                          assignedUserIds: [
+                                            ...newEvent.assignedUserIds,
+                                            numericValue,
+                                          ],
+                                        });
+                                      }
+                                      setOpenDialogAssignCombobox(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        newEvent.assignedUserIds.includes(user.value)
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {user.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mark as Done */}
+                <div className="flex items-center">
+                  <Checkbox
+                    id="isDone"
+                    checked={newEvent.isDone}
+                    onCheckedChange={(checked) =>
+                      setNewEvent({ ...newEvent, isDone: checked })
+                    }
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <Label
+                    htmlFor="isDone"
+                    className="ml-2 block text-sm text-gray-700"
+                  >
+                    Mark as Done
+                  </Label>
+                </div>
+              </div>
+
+              {/* Dialog Footer */}
+              <DialogFooter className="mt-6 flex justify-end space-x-3">
+                {mode === "edit" && role === "admin" && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleEventDelete}
+                    className="flex items-center space-x-2 flex-1 md:flex-none"
+                    type="button"
+                  >
+                    <Trash2
+                      className="h-4 w-4 text-white"
+                      aria-hidden="true"
+                    />
+                    <span>Delete</span>
+                  </Button>
+                )}
                 <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openDialogAssignCombobox}
-                  className="mt-1 w-full justify-between"
+                  onClick={handleEventAddOrUpdate}
+                  className="flex items-center space-x-2 flex-1 md:flex-none"
+                  type="button"
                 >
-                  {newEvent.assignedUserIds.length > 0
-                    ? users
-                        .filter(user =>
-                          newEvent.assignedUserIds.includes(user.value)
-                        )
-                        .map(user => user.label)
-                        .join(", ")
-                    : "Assign to Users"}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  {mode === "edit" ? (
+                    <>
+                      <Save
+                        className="h-4 w-4 text-white"
+                        aria-hidden="true"
+                      />
+                      <span>Update Event</span>
+                    </>
+                  ) : mode === "add" ? (
+                    <>
+                      <Plus
+                        className="h-4 w-4 text-white"
+                        aria-hidden="true"
+                      />
+                      <span>Add Event</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save
+                        className="h-4 w-4 text-white"
+                        aria-hidden="true"
+                      />
+                      <span>Update Event</span>
+                    </>
+                  )}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput placeholder="Search users..." />
-                  <CommandList>
-                    <CommandEmpty>No user found.</CommandEmpty>
-                    <CommandGroup>
-                      {users.map((user) => (
-                        <CommandItem
-                          key={user.value}
-                          value={String(user.value)}
-                          onSelect={(currentValue) => {
-                            const numericValue = Number(currentValue);
-                            if (newEvent.assignedUserIds.includes(numericValue)) {
-                              setNewEvent({
-                                ...newEvent,
-                                assignedUserIds: newEvent.assignedUserIds.filter(
-                                  (id) => id !== numericValue
-                                ),
-                              });
-                            } else {
-                              setNewEvent({
-                                ...newEvent,
-                                assignedUserIds: [
-                                  ...newEvent.assignedUserIds,
-                                  numericValue,
-                                ],
-                              });
-                            }
-                            setOpenDialogAssignCombobox(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              newEvent.assignedUserIds.includes(user.value)
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          {user.label}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
-      </div>
 
-      {/* Mark as Done */}
-      <div className="flex items-center">
-        {role === "admin" && mode !== 'view' ? (
-          <Checkbox
-            id="isDone"
-            checked={newEvent.isDone}
-            onCheckedChange={(checked) =>
-              setNewEvent({ ...newEvent, isDone: checked })
-            }
-            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-          />
-        ) : (
-          <Checkbox
-            id="isDoneUser"
-            checked={newEvent.isDone}
-            onCheckedChange={(checked) =>
-              setNewEvent({ ...newEvent, isDone: checked })
-            }
-            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-          />
-        )}
-        <Label
-          htmlFor={role === "admin" && mode !== 'view' ? "isDone" : "isDoneUser"}
-          className="ml-2 block text-sm text-gray-700"
-        >
-          Mark as Done
-        </Label>
-      </div>
-    </form>
-
-{/* Dialog Footer */}
-<DialogFooter className="mt-6 flex justify-end space-x-3">
-  {mode === 'edit' && role === "admin" && (
-    <Button
-      variant="destructive"
-      onClick={handleEventDelete}
-      className="flex items-center space-x-2 flex-1 md:flex-none"
-    >
-      <Trash2 className="h-4 w-4 text-white" aria-hidden="true" />
-      <span>Delete</span>
-    </Button>
-  )}
-  <Button
-    onClick={handleEventAddOrUpdate}
-    className="flex items-center space-x-2 flex-1 md:flex-none"
-  >
-    {mode === 'edit' ? (
-      <>
-        <Save className="h-4 w-4 text-white" aria-hidden="true" />
-        <span>Update Event</span>
-      </>
-    ) : mode === 'add' ? (
-      <>
-        <Plus className="h-4 w-4 text-white" aria-hidden="true" />
-        <span>Add Event</span>
-      </>
-    ) : (
-      <>
-        <Save className="h-4 w-4 text-white" aria-hidden="true" />
-        <span>Update Event</span>
-      </>
-    )}
-  </Button>
-</DialogFooter>
-
-  </DialogContent>
-</Dialog>
-
-
- 
-
+        {/* FullCalendar Component */}
         <div className="bg-white shadow-none">
           <FullCalendar
-            ref={(element) => (calendarRef.current = element)} // Correctly setting the ref
+            ref={(element) => (calendarRef.current = element)}
             plugins={[
               dayGridPlugin,
               timeGridPlugin,
@@ -1294,10 +1357,10 @@ const CalendarSection = ({ role, userId }) => {
               right: "dayGridMonth,timeGridWeek,timeGridDay,listYear",
             }}
             events={events}
-            selectable={role === "admin"} // Only admins can select and add events
+            selectable={role === "admin"}
             select={handleDateSelect}
             eventClick={handleEventClick}
-            editable={role === "admin"} // Only admins can edit events
+            editable={role === "admin"}
             eventDrop={handleEventDrop}
             eventResize={handleEventResize}
             eventChange={handleEventChange}
@@ -1317,7 +1380,7 @@ const CalendarSection = ({ role, userId }) => {
             dayCellClassNames="border-2 border-gray-300"
             eventClassNames="mb-1 font-semibold"
             dayHeaderClassNames="bg-gray-200 text-gray-700 uppercase tracking-wider"
-            datesSet={handleMonthChange} // Listen for month changes
+            datesSet={handleMonthChange}
           />
         </div>
       </Card>
