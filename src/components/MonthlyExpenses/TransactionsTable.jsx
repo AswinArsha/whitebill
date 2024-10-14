@@ -71,28 +71,28 @@ const TransactionsTable = ({
               {transactions.map((transaction) => (
                 <tr
                   key={transaction.id}
-                  className="hover:bg-gray-100 transition-colors duration-200"
+                  className="hover:bg-gray-100 text-center transition-colors duration-200"
                 >
-                  <td className="whitespace-nowrap px-4 py-2 font-medium text-gray-900">
+                  <td className="whitespace-nowrap  px-4 py-2 font-medium text-gray-900">
                     {dayjs(transaction.date).format("DD MMM YYYY")}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                  <td className="whitespace-nowrap px-4  py-2 text-gray-700">
                     {transaction.title}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                  <td className="whitespace-nowrap px-4  py-2 text-gray-700">
                     {transaction.category}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                  <td className="whitespace-nowrap px-4  py-2 text-gray-700">
                     {transaction.type}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700 text-right">
+                  <td className="whitespace-nowrap px-4 text-right py-2 text-gray-700 ">
                     ₹{transaction.amount}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                  <td className="whitespace-nowrap px-4  py-2 text-gray-700">
                     {transaction.description}
                   </td>
-                  <td className="whitespace-nowrap px-2 py-2 text-gray-700">
-                    <div className="space-x-2 flex">
+                  <td className="whitespace-nowrap flex justify-center px-2 py-2 text-gray-700">
+                    <div className="space-x-2  flex">
                       <Button
                         variant="outline"
                         onClick={() => {

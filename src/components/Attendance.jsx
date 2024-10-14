@@ -421,7 +421,7 @@ const Attendance = ({ role, userId }) => {
   };
 
   return (
-    <div>
+    <div className="h-auto">
       {/* Header */}
       <div className="flex justify-between items-center ">
 

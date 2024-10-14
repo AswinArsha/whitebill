@@ -317,7 +317,7 @@ const Remainders = ({ role, userId }) => {
   
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col h-auto">
       {/* Header Section */}
       <div className="flex justify-between items-center mb-4">
         {/* Additional header content if needed */}

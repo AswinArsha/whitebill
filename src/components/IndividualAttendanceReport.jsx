@@ -1,4 +1,3 @@
-// IndividualAttendanceReport.jsx
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +24,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../supabase";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfMonth, getDay, addDays } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import AlertNotification from "./AlertNotification";
 
@@ -56,7 +55,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
   }, [id, selectedMonth]);
 
   const fetchUserDetails = async () => {
-    // Ensure that 'id' is an integer
     const userId = parseInt(id, 10);
     if (isNaN(userId)) {
       console.error("Invalid user ID:", id);
@@ -80,7 +78,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
   };
 
   const fetchAttendanceDetails = async () => {
-    // Ensure that 'id' is an integer
     const userId = parseInt(id, 10);
     if (isNaN(userId)) {
       console.error("Invalid user ID:", id);
@@ -110,7 +107,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
       return;
     }
 
-    // Organize attendance records by date
     const attendanceMap = {};
     data.forEach((record) => {
       const dateStr = format(parseISO(record.date), "yyyy-MM-dd");
@@ -153,7 +149,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         checkIn = formatTime(records[0]);
         checkOut = formatTime(records[records.length - 1]);
 
-        // If the employee checked in after the office start time, they are late
         if (records[0] <= officeStartTime) {
           status = "Present";
         } else {
@@ -161,7 +156,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
           daysLate += 1;
         }
 
-        daysPresent += 1; // Increment "Present" for both Present and Late days
+        daysPresent += 1;
 
         const checkInMinutes = convertTimeToMinutes(records[0]);
         totalCheckInMinutes += checkInMinutes;
@@ -189,17 +184,23 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         : "-";
 
     setAttendanceStats({
-      daysPresent, // Includes both "Present" and "Late" days
+      daysPresent,
       daysAbsent,
       daysLate,
       averageCheckInTime,
     });
 
+    const paddedCalendarData = padCalendarWithEmptyDays(
+      tempCalendarData,
+      firstDay
+    );
+
     setAttendanceData(tempAttendanceData);
-    setCalendarData(tempCalendarData);
-    setLoading(false); // Set loading to false after fetching data
+    setCalendarData(paddedCalendarData);
+    setLoading(false);
   };
 
+  // Format time helper
   const formatTime = (timeStr) => {
     const [hour, minute] = timeStr.split(":");
     const date = new Date();
@@ -213,12 +214,24 @@ const IndividualAttendanceReport = ({ role, userId }) => {
   };
 
   const formatMinutesToTime = (totalMinutes) => {
-    if (isNaN(totalMinutes)) return "-"; // Safeguard for invalid values
+    if (isNaN(totalMinutes)) return "-";
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     const date = new Date();
     date.setHours(hours, minutes);
     return format(date, "hh:mm a");
+  };
+
+  const padCalendarWithEmptyDays = (calendarData, firstDayOfMonth) => {
+    const dayOfWeek = getDay(firstDayOfMonth);
+    const paddedData = [];
+
+    // Add padding days for the days before the first day of the month
+    for (let i = 0; i < dayOfWeek; i++) {
+      paddedData.push({ date: null, status: "empty" });
+    }
+
+    return [...paddedData, ...calendarData];
   };
 
   const generateMonthOptions = () => {
@@ -272,8 +285,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
             {user.position}, {user.department}
           </p>
           <AlertNotification />
-      
-        </div>{" "}
+        </div>
         <div className="flex items-center justify-end space-x-4">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-[180px] mt-4 md:mt-0">
@@ -287,12 +299,12 @@ const IndividualAttendanceReport = ({ role, userId }) => {
               ))}
             </SelectContent>
           </Select>
-
         </div>
       </div>
 
       {/* Attendance Statistics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        {/* Cards for Days Present, Absent, Late, and Avg Check-in */}
         <Card className="">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Days Present</CardTitle>
@@ -337,10 +349,9 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         </Card>
       </div>
 
-      {/* Attendance Calendar and Details */}
       <div className="grid gap-8 md:grid-cols-2">
         {/* Attendance Calendar */}
-        <Card>
+        <Card className="h-auto">
           <CardHeader>
             <CardTitle>Attendance Calendar</CardTitle>
           </CardHeader>
@@ -373,11 +384,11 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         </Card>
 
         {/* Attendance Details Table */}
-        <Card>
+        <Card className="h-auto">
           <CardHeader>
             <CardTitle>Attendance Details</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-auto h-[85%]">
+          <CardContent className="overflow-auto max-h-[400px]">
             <Table className="relative">
               <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
@@ -390,7 +401,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
               <TableBody>
                 {attendanceData.map((record, index) => (
                   <TableRow key={index}>
-                    <TableCell>{record.date}</TableCell>
+                    <TableCell>{format(parseISO(record.date), "dd-MM-yyyy")}</TableCell> {/* Changed format */}
                     <TableCell>{record.checkIn}</TableCell>
                     <TableCell>{record.checkOut}</TableCell>
                     <TableCell>
@@ -418,3 +429,4 @@ const IndividualAttendanceReport = ({ role, userId }) => {
 };
 
 export default IndividualAttendanceReport;
+

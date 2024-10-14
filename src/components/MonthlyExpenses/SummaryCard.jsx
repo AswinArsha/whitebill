@@ -14,14 +14,14 @@ const SummaryCard = ({ summary }) => (
     </CardHeader>
     <CardContent>
       <div className="grid grid-cols-2 gap-4">
-        <Card className="flex flex-row items-center p-6  border-green-500 bg-white">
+        <Card className="flex flex-row items-center p-6   bg-white">
           <TrendingUp className="text-green-500 w-8 h-8 mr-4" />
           <div>
             <h4 className="text-lg font-semibold text-green-500">Total Income</h4>
             <p className="text-xl font-bold text-green-500">₹{summary.income}</p>
           </div>
         </Card>
-        <Card className="flex flex-row items-center p-4  border-red-500 bg-white">
+        <Card className="flex flex-row items-center p-4   bg-white">
           <TrendingDown className="text-red-500 w-8 h-8 mr-4" />
           <div>
             <h4 className="text-lg font-semibold text-red-500">Total Expense</h4>
