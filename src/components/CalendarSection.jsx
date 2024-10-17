@@ -272,123 +272,183 @@ const CalendarSection = ({ role, userId }) => {
   const validateEvent = () => {
     let isValid = true;
     const newErrors = { title: "", category: "" };
-
-    if (!newEvent.title) {
-      newErrors.title = "Event title is required.";
-      isValid = false;
+  
+    if (mode !== 'view') { // Skip validation in 'view' mode
+      if (!newEvent.title) {
+        newErrors.title = "Event title is required.";
+        isValid = false;
+      }
+  
+      if (!newEvent.category) {
+        newErrors.category = "Event category is required.";
+        isValid = false;
+      }
     }
-
-    if (!newEvent.category) {
-      newErrors.category = "Event category is required.";
-      isValid = false;
-    }
-
+  
     setErrors(newErrors);
     return isValid;
   };
+  
 
+const handleEventAddOrUpdate = async () => {
+  // In 'view' mode, we only update the 'is_done' status
+  if (mode === 'view') {
+    const eventToSubmit = {
+      is_done: newEvent.isDone,
+    };
 
-  const handleEventAddOrUpdate = async () => {
-    if (mode === 'edit' || mode === 'add') {
-      if (validateEvent()) {
-        const eventToSubmit = {
-          title: newEvent.title,
-          description: newEvent.description,
-          start_time: newEvent.allDay
-            ? `${newEvent.start}T00:00:00Z`
-            : newEvent.start,
-          end_time: newEvent.allDay
-            ? `${newEvent.end}T23:59:59Z`
-            : newEvent.end,
-          location: newEvent.location,
-          category: newEvent.category,
-          all_day: newEvent.allDay,
-          is_done: newEvent.isDone,
-          client_name: newEvent.clientName,
-          assigned_user_ids:
-            role === "admin" ? newEvent.assignedUserIds : [userId],
+    const { error } = await supabase
+      .from("events")
+      .update(eventToSubmit)
+      .eq("id", newEvent.id);
+
+    if (error) {
+      console.error("Error updating event status:", error);
+      toast.error("Failed to update event status. Please try again.");
+    } else {
+      setEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event.id === newEvent.id
+            ? {
+                ...event,
+                isDone: newEvent.isDone,
+                backgroundColor: getCategoryColor(
+                  event.extendedProps.category,
+                  newEvent.isDone
+                ),
+                borderColor: getCategoryColor(
+                  event.extendedProps.category,
+                  newEvent.isDone
+                ),
+                extendedProps: {
+                  ...event.extendedProps,
+                  isDone: newEvent.isDone,
+                },
+              }
+            : event
+        )
+      );
+      setIsModalOpen(false);
+      toast.success(
+        newEvent.isDone 
+          ? "Task completed successfully! 🎉" 
+          : "Task marked as incomplete.", 
+        { duration: 3000 }
+      );
+      
+    }
+    return; // Exit the function after handling 'view' mode
+  }
+
+  // Existing logic for 'edit' and 'add' modes
+  if (validateEvent()) {
+    const eventToSubmit = {
+      title: newEvent.title,
+      description: newEvent.description,
+      start_time: newEvent.allDay
+        ? `${newEvent.start}T00:00:00Z`
+        : newEvent.start,
+      end_time: newEvent.allDay
+        ? `${newEvent.end}T23:59:59Z`
+        : newEvent.end,
+      location: newEvent.location,
+      category: newEvent.category,
+      all_day: newEvent.allDay,
+      is_done: newEvent.isDone, // This value is now updated correctly
+      client_name: newEvent.clientName,
+      assigned_user_ids:
+        role === "admin" ? newEvent.assignedUserIds : [userId],
+    };
+
+    if (mode === 'edit' && role === "admin") {
+      const { error } = await supabase
+        .from("events")
+        .update(eventToSubmit)
+        .eq("id", newEvent.id);
+
+      if (error) {
+        console.error("Error updating event:", error);
+        toast.error("Failed to update event. Please try again.");
+      } else {
+        // Update the local state immediately
+        setEvents((currentEvents) =>
+          currentEvents.map((event) =>
+            event.id === newEvent.id
+              ? {
+                  ...event,
+                  ...eventToSubmit,
+                  backgroundColor: getCategoryColor(
+                    eventToSubmit.category,
+                    eventToSubmit.is_done
+                  ),
+                  borderColor: getCategoryColor(
+                    eventToSubmit.category,
+                    eventToSubmit.is_done
+                  ),
+                  extendedProps: {
+                    ...event.extendedProps,
+                    isDone: eventToSubmit.is_done,  // Update the isDone property locally
+                    category: eventToSubmit.category,
+                    assignedUserIds:
+                      eventToSubmit.assigned_user_ids || [],
+                  },
+                }
+              : event
+          )
+        );
+        setIsModalOpen(false);
+        toast.success('Event updated successfully! ✏️', {
+          duration: 3000,
+        });
+      }
+    } else if (mode === 'add' && role === "admin") {
+      const { data, error } = await supabase
+        .from("events")
+        .insert([eventToSubmit])
+        .select();
+
+      if (error) {
+        console.error("Error adding event:", error);
+        toast.error("Failed to add event. Please try again.");
+      } else {
+        const newFormattedEvent = {
+          id: data[0].id,
+          title: data[0].title,
+          start: data[0].start_time,
+          end: data[0].end_time,
+          allDay: data[0].all_day,
+          backgroundColor: getCategoryColor(data[0].category, data[0].is_done),
+          borderColor: getCategoryColor(data[0].category, data[0].is_done),
+          extendedProps: {
+            description: data[0].description,
+            location: data[0].location,
+            category: data[0].category,
+            isDone: data[0].is_done,
+            clientName: data[0].client_name,
+            assignedUserIds: data[0].assigned_user_ids || [],
+          },
         };
-  
-        if (mode === 'edit' && role === "admin") {
-          const { error } = await supabase
-            .from("events")
-            .update(eventToSubmit)
-            .eq("id", newEvent.id);
-  
-          if (error) {
-            console.error("Error updating event:", error);
-            toast.error("Failed to update event. Please try again.");
-          } else {
-            setEvents((currentEvents) =>
-              currentEvents.map((event) =>
-                event.id === newEvent.id
-                  ? {
-                      ...event,
-                      ...eventToSubmit,
-                      backgroundColor: getCategoryColor(
-                        eventToSubmit.category,
-                        eventToSubmit.is_done
-                      ),
-                      borderColor: getCategoryColor(
-                        eventToSubmit.category,
-                        eventToSubmit.is_done
-                      ),
-                      extendedProps: {
-                        ...event.extendedProps,
-                        ...eventToSubmit,
-                        assignedUserIds:
-                          eventToSubmit.assigned_user_ids || [],
-                      },
-                    }
-                  : event
-              )
-            );
-            setIsModalOpen(false);
-            toast.success('Event updated successfully! ✏️', {
-              duration: 3000,
-        
-            });
-            
-          }
-        } else if (mode === 'add' && role === "admin") {
-          const { data, error } = await supabase
-            .from("events")
-            .insert([eventToSubmit])
-            .select();
-  
-          if (error) {
-            console.error("Error adding event:", error);
-            toast.error("Failed to add event. Please try again.");
-          } else {
-            const newFormattedEvent = {
-              id: data[0].id,
-              title: data[0].title,
-              start: data[0].start_time,
-              end: data[0].end_time,
-              allDay: data[0].all_day,
-              backgroundColor: getCategoryColor(data[0].category, data[0].is_done),
-              borderColor: getCategoryColor(data[0].category, data[0].is_done),
-              extendedProps: {
-                description: data[0].description,
-                location: data[0].location,
-                category: data[0].category,
-                isDone: data[0].is_done,
-                clientName: data[0].client_name,
-                assignedUserIds: data[0].assigned_user_ids || [],
-              },
-            };
-            setEvents((currentEvents) => [...currentEvents, newFormattedEvent]);
-            setIsModalOpen(false);
-            toast.success('Event added successfully! 🎉', {
-              duration: 3000,
-           
-            });
-            
-          }
-        }
+        setEvents((currentEvents) => [...currentEvents, newFormattedEvent]);
+        setIsModalOpen(false);
+        toast.success('Event added successfully! 🎉', {
+          duration: 3000,
+        });
       }
     }
-  };
+  }
+};
+
+
+// MarkAsDone usage in the dialog
+
+<MarkAsDone
+  isDone={newEvent.isDone}
+  onMarkDone={() => setNewEvent((prevEvent) => ({ ...prevEvent, isDone: !prevEvent.isDone }))}
+/>
+
+
+
+
 
   const handleEventDelete = async () => {
     if (mode === 'edit' && role === "admin") {
@@ -1203,12 +1263,14 @@ const CalendarSection = ({ role, userId }) => {
              
 
            {/* Mark as Done */}
+    
 <MarkAsDone
   isDone={newEvent.isDone}
   eventId={newEvent.id}
   setEvents={setEvents}
-  onMarkDone={() => setNewEvent({ ...newEvent, isDone: !newEvent.isDone })}
+  onMarkDone={() => setNewEvent((prevEvent) => ({ ...prevEvent, isDone: !prevEvent.isDone }))}
 />
+
 
 
               </div>

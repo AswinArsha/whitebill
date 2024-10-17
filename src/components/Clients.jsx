@@ -6,8 +6,6 @@ import { supabase } from '../supabase';
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -23,7 +21,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -53,6 +50,9 @@ const Client = ({ role, userId }) => {
   const [expandedColumns, setExpandedColumns] = useState([
     'Lead', 'Contacted', 'Proposal', 'Won', 'Lost'
   ]);
+
+  // New state for Delete Dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -337,7 +337,6 @@ const Client = ({ role, userId }) => {
                               >
                                 <Card className="p-2 text-sm rounded-md shadow-none border border-gray-200">
                                   <CardHeader className="flex flex-row justify-between items-center p-0">
-                                  
                                     <div>
                                       <p className="font-semibold">{client.client_name}</p>
                                       <p className="text-xs text-gray-600">{client.name}</p>
@@ -362,13 +361,15 @@ const Client = ({ role, userId }) => {
                                           <Edit className="h-4 w-4" />
                                           <span>Edit</span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="flex cursor-pointer items-center space-x-2 text-red-600" onClick={() => { /* Trigger delete dialog */ }}>
+                                        <DropdownMenuItem
+                                          onClick={() => { setSelectedClient(client); setIsDeleteDialogOpen(true); }}
+                                          className="flex items-center cursor-pointer space-x-2 text-red-600"
+                                        >
                                           <Trash2 className="h-4 w-4" />
                                           <span>Delete</span>
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
-                                  
                                   </CardHeader>
                                 </Card>
                               </div>
@@ -395,11 +396,11 @@ const Client = ({ role, userId }) => {
       </Card>
 
       {/* Add/Edit Client Dialog */}
-      {selectedClient && (
-        <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
+      {selectedClient && isEditMode && (
+        <Dialog open={isEditMode && selectedClient !== null} onOpenChange={(open) => { if (!open) { setIsEditMode(false); setSelectedClient(null); } }}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+              <DialogTitle>Edit Client</DialogTitle>
             </DialogHeader>
             <form className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Client Name */}
@@ -480,7 +481,7 @@ const Client = ({ role, userId }) => {
             <div className="mt-3 flex justify-end space-x-2">
               <Button
                 variant="outline"
-                onClick={() => setSelectedClient(null)}
+                onClick={() => { setIsEditMode(false); setSelectedClient(null); }}
                 className="flex items-center space-x-1 text-sm px-3 py-1.5"
               >
                 <X className="h-4 w-4" />
@@ -491,7 +492,7 @@ const Client = ({ role, userId }) => {
                 className="flex items-center space-x-1 text-sm px-3 py-1.5"
               >
                 <Check className="h-4 w-4" />
-                <span>{isEditMode ? 'Save Changes' : 'Add Client'}</span>
+                <span>Save Changes</span>
               </Button>
             </div>
           </DialogContent>
@@ -499,27 +500,22 @@ const Client = ({ role, userId }) => {
       )}
 
       {/* Delete Confirmation AlertDialog */}
-      {selectedClient && !isEditMode && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" className="hidden"></Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Client</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete this client? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { handleDeleteClient(selectedClient.id); setSelectedClient(null); }}>
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Client</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this client? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { handleDeleteClient(selectedClient.id); setIsDeleteDialogOpen(false); setSelectedClient(null); }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

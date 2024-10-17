@@ -1,61 +1,77 @@
-import React, { useState, useRef } from "react";
-import { Check, PartyPopper } from "lucide-react";
+import React, { useRef } from "react";
+import { Check } from "lucide-react";
 import confetti from "canvas-confetti";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "../supabase";
+import toast from 'react-hot-toast'; // Import react-hot-toast
 
-const MarkAsDone = ({ isDone, onMarkDone, eventId, setEvents }) => {
-  const [showConfetti, setShowConfetti] = useState(false);
-  const { toast } = useToast();
+const compliments = [
+  "Great job! Keep going! 💪",
+  "You’re crushing it! 🚀",
+  "Well done, superstar! 🌟",
+  "Amazing work! 🎉",
+  "You’re unstoppable! 🔥",
+  "Keep up the momentum! 🎯",
+  "You're a productivity wizard! 🧙‍♂️",
+  "Incredible effort! 👏",
+  "You make it look easy! 😎",
+  "Bravo! You nailed it! 💥",
+  "You’re on fire today! 🔥",
+  "Keep smashing those goals! 🎯",
+  "You're a rockstar! 🎸",
+  "Unstoppable energy! ⚡️",
+  "You're a force to be reckoned with! 💪",
+  "What a legend! 🏆",
+  "Boom! Another one down! 💥",
+  "You’re making magic happen! ✨",
+  "Master of productivity! 🎩",
+  "Look at you go! 👏",
+  "Crushing it like a pro! 🏅",
+  "Keep that momentum rolling! 🔥",
+  "Absolutely killing it! 💀",
+  "You're a machine! 🤖",
+  "Your hard work is paying off! 💪",
+  "The future is yours! 🌟",
+  "You've got this! 👊",
+  "You’re building an empire! 🏛️",
+  "Shining like a star! 🌟",
+  "Boss mode activated! 💼",
+  "You're unstoppable! 🌪️",
+  "Onwards and upwards! 🚀",
+  "Mission accomplished! 🎖️"
+];
+
+
+const MarkAsDone = ({ isDone, onMarkDone }) => {
   const buttonRef = useRef(null); // Reference to the button element
 
-  const handleMarkAsDone = async () => {
+  const handleMarkAsDone = () => {
     const updatedIsDone = !isDone; // Toggle the done state
 
-    if (updatedIsDone) {
-      // Trigger confetti only when marking as done
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-
-      confetti({
-        particleCount: 60,
-        startVelocity: 17,
-        spread: 60,
-        origin: {
-          x: (buttonRect.left + buttonRect.width / 2) / window.innerWidth,
-          y: (buttonRect.top + buttonRect.height / 2) / window.innerHeight,
-        },
-        zIndex: 10000, // Ensure the confetti is above everything
-      });
-
-      toast({
-        title: "Good job!",
-        description: "Task Completed 🎉 Ready for the next one?",
-        variant: "positive",
-        icon: <PartyPopper className="h-5 w-5 text-green-600" />,
-      });
-    }
-
-    // Update the event in Supabase
-    const { error } = await supabase
-      .from("events")
-      .update({ is_done: updatedIsDone })
-      .eq("id", eventId);
-
-    if (error) {
-      toast.error("Failed to update event status. Please try again.");
-    } else {
-      // Update local state after successful update
-      setEvents((currentEvents) =>
-        currentEvents.map((event) =>
-          event.id === eventId ? { ...event, isDone: updatedIsDone } : event
-        )
-      );
-    }
-
-    // Trigger the mark as done logic
+    // Immediately update the UI
     onMarkDone();
+
+    if (updatedIsDone) {
+      // Trigger confetti with a short delay to sync with the UI change
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      
+      // Use a setTimeout of 100ms to slightly delay confetti trigger
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          startVelocity: 17,
+          spread: 60,
+          origin: {
+            x: (buttonRect.left + buttonRect.width / 2) / window.innerWidth,
+            y: (buttonRect.top + buttonRect.height / 2) / window.innerHeight,
+          },
+          zIndex: 10000, // Ensure the confetti is above everything
+        });
+      }, 100); // Small delay to ensure the button state changes instantly
+
+      // Show toast notification with a random compliment or motivational phrase
+      const randomCompliment = compliments[Math.floor(Math.random() * compliments.length)];
+      toast.success(` ${randomCompliment}`, { duration: 2000 });
+    }
   };
 
   return (
@@ -70,9 +86,11 @@ const MarkAsDone = ({ isDone, onMarkDone, eventId, setEvents }) => {
           } focus:outline-none focus:ring-2 focus:ring-green-300`}
           aria-label="Mark as Done"
         >
-          {isDone && (
-            <Check className="h-4 w-4 text-white transition-opacity duration-300" />
-          )}
+          <Check
+            className={`h-4 w-4 text-white transition-opacity duration-100 ${
+              isDone ? "opacity-100" : "opacity-0"
+            }`}
+          />
         </button>
         <Label
           htmlFor="isDone"
@@ -87,4 +105,3 @@ const MarkAsDone = ({ isDone, onMarkDone, eventId, setEvents }) => {
 };
 
 export default MarkAsDone;
-
