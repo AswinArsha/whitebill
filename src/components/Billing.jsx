@@ -5,8 +5,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PrintUI from "./PrintUI";
 import {
@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "../supabase"; // Ensure this is correctly initialized for v2
 import { v4 as uuidv4 } from "uuid";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Trash2, EllipsisVertical ,Check , Eye, Wallet, DollarSign   } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Check, Eye, Wallet, DollarSign } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -48,30 +48,21 @@ import {
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
-  MenubarShortcut,
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const Billing = ({ role, userId }) => {
-  // State for bill items
+  // State variables
   const [items, setItems] = useState([
     { description: "Reels", quantity: "", numberOfDays: "", total: "" },
     { description: "Posters", quantity: "", numberOfDays: "", total: "" },
     { description: "Total Engagements", quantity: "", numberOfDays: "", total: "" },
     { description: "Story", quantity: "", numberOfDays: "", total: "" }
   ]);
-
-  // State for additional bills
   const [additionalBills, setAdditionalBills] = useState([]);
-
-  // State for outstanding balance
   const [outstandingBalance, setOutstandingBalance] = useState(0);
-
-  // Flag to check if balance has been added to additional bills
   const [isBalanceAdded, setIsBalanceAdded] = useState(false);
-
-  // Other state variables
   const [billHistory, setBillHistory] = useState([]);
   const [clientDetails, setClientDetails] = useState("");
   const [manualTotal, setManualTotal] = useState(0);
@@ -81,16 +72,12 @@ const Billing = ({ role, userId }) => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [isComboBoxOpen, setIsComboBoxOpen] = useState(false);
 
-  // States for Payment Mode Dialog
+  // Dialog states
   const [isPaymentModeOpen, setIsPaymentModeOpen] = useState(false);
   const [currentBillId, setCurrentBillId] = useState(null);
   const [paymentMode, setPaymentMode] = useState("");
-
-  // States for Balance Dialog
   const [isBalanceOpen, setIsBalanceOpen] = useState(false);
   const [balanceAmount, setBalanceAmount] = useState("");
-
-  // States for View Dialog
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [viewBill, setViewBill] = useState(null);
 
@@ -117,7 +104,6 @@ const Billing = ({ role, userId }) => {
     };
   }, []);
 
-  // Fetch clients from Supabase
   const fetchClients = async () => {
     const { data, error } = await supabase.from('clients').select('*');
     if (error) {
@@ -127,27 +113,22 @@ const Billing = ({ role, userId }) => {
     }
   };
 
-  // Add a new bill item
   const addItem = () => {
     setItems([...items, { description: "", quantity: "", numberOfDays: "", total: "" }]);
   };
 
-  // Add a new additional bill
   const addAdditionalBill = () => {
     setAdditionalBills([...additionalBills, { name: "", amount: "" }]);
   };
 
-  // Update a bill item
   const updateItem = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
   };
 
-  // Update an additional bill
   const updateAdditionalBill = (index, field, value) => {
     const newAdditionalBills = [...additionalBills];
-    // Prevent editing the balance amount if it's already added
     if (newAdditionalBills[index].isBalance && field === "amount") {
       return;
     }
@@ -155,14 +136,12 @@ const Billing = ({ role, userId }) => {
     setAdditionalBills(newAdditionalBills);
   };
 
-  // Delete a bill item
   const deleteItem = (index) => {
     const newItems = [...items];
     newItems.splice(index, 1);
     setItems(newItems);
   };
 
-  // Handle bill generation and saving to Supabase
   const handleBillGenerated = async () => {
     const formattedDate = dateRange?.from && dateRange?.to 
       ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
@@ -177,8 +156,8 @@ const Billing = ({ role, userId }) => {
       items: [...items],
       client_details: clientDetails,
       additional_bills: additionalBills,
-      payment_mode: "", // Initialize as empty
-      balance: 0 // Initialize as 0
+      payment_mode: "",
+      balance: 0
     };
 
     try {
@@ -211,38 +190,32 @@ const Billing = ({ role, userId }) => {
     }
   };
 
-  // Fetch bill history from Supabase
-const fetchBillHistory = async () => {
-  const { data, error } = await supabase
-    .from('bills')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const fetchBillHistory = async () => {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching bills:', error);
-  } else {
-    setBillHistory(data);
-  }
-};
+    if (error) {
+      console.error('Error fetching bills:', error);
+    } else {
+      setBillHistory(data);
+    }
+  };
 
-
-  // Handle client selection and fetch outstanding balance
   const handleClientSelect = (client) => {
     setSelectedClient(client);
     setClientDetails(`${client.company}\n${client.location}\n${client.phone}`);
     setIsComboBoxOpen(false);
 
-    // Reset additional bills and balance flags
     setAdditionalBills([]);
     setIsBalanceAdded(false);
 
     fetchOutstandingBalance(client);
   };
 
-  // Fetch outstanding balance for the selected client based on the latest bill
   const fetchOutstandingBalance = async (client) => {
     try {
-      // Fetch the latest bill for the client based on 'created_at'
       const { data, error } = await supabase
         .from('bills')
         .select('balance')
@@ -256,8 +229,6 @@ const fetchBillHistory = async () => {
       } else if (data.length > 0 && data[0].balance > 0) {
         const latestBalance = parseFloat(data[0].balance);
         setOutstandingBalance(latestBalance);
-
-        // Automatically add balance to additional bills if there's an outstanding amount
         setAdditionalBills([{ name: "Balance", amount: latestBalance, isBalance: true }]);
         setIsBalanceAdded(true);
       } else {
@@ -269,7 +240,6 @@ const fetchBillHistory = async () => {
     }
   };
 
-  // Handle bill deletion
   const handleDeleteBill = async (id) => {
     try {
       const { error } = await supabase
@@ -287,7 +257,6 @@ const fetchBillHistory = async () => {
     }
   };
 
-  // Handle updating payment mode
   const handleUpdatePaymentMode = async () => {
     if (!currentBillId) return;
 
@@ -310,7 +279,6 @@ const fetchBillHistory = async () => {
     }
   };
 
-  // Handle updating balance
   const handleUpdateBalance = async () => {
     if (!currentBillId) return;
 
@@ -333,49 +301,99 @@ const fetchBillHistory = async () => {
     }
   };
 
-  // Filter bill history based on search term
+  // Handle marking payment as done and transferring to transactions table
+  const handlePaymentDone = async (billId) => {
+    try {
+      // Fetch the bill details
+      const { data: billData, error: fetchError } = await supabase
+        .from('bills')
+        .select('*')
+        .eq('id', billId)
+        .single();
+
+      if (fetchError) {
+        throw new Error('Error fetching bill details');
+      }
+
+      if (!billData) {
+        throw new Error('Bill not found');
+      }
+
+      // Extract the first two words from client_details
+      const clientDetails = billData.client_details || "";
+      const firstTwoWords = clientDetails.split(' ').slice(0, 2).join(' ');
+
+      // Parse the total amount
+      let totalAmount = parseFloat(billData.total);
+      if (isNaN(totalAmount)) {
+        totalAmount = parseFloat(billData.total.replace(/[^\d.-]/g, ''));
+        if (isNaN(totalAmount)) {
+          throw new Error('Invalid total amount in bill');
+        }
+      }
+
+      // Get the current date in 'YYYY-MM-DD' format
+      const paymentDate = new Date();
+      const formattedPaymentDate = paymentDate.toISOString().split('T')[0];
+
+      // Create a new transaction record
+      const transactionData = {
+        title: firstTwoWords,
+        amount: totalAmount,
+        date: formattedPaymentDate,
+        type: 'income',
+        category: 'other', // You can set a default category or modify as needed
+        description: ``,
+      };
+
+      // Insert the new transaction into the transactions table
+      const { data: transaction, error: insertError } = await supabase
+        .from('transactions')
+        .insert([transactionData])
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error('Error creating transaction');
+      }
+
+      // Update the bills table to mark the payment as done
+      const { error: updateError } = await supabase
+        .from('bills')
+        .update({ payment_done: true })
+        .eq('id', billId);
+
+      if (updateError) {
+        throw new Error('Error updating payment status');
+      }
+
+      // Update the local state to reflect changes
+      setBillHistory((prevBills) =>
+        prevBills.map((bill) =>
+          bill.id === billId ? { ...bill, payment_done: true } : bill
+        )
+      );
+
+    } catch (error) {
+      console.error('Error marking payment as done:', error);
+    }
+  };
+
   const filteredBillHistory = billHistory.filter(bill =>
     bill.client_details.toLowerCase().includes(searchTerm.toLowerCase())
   );
-// Handle marking payment as done
-const handlePaymentDone = async (billId) => {
-  try {
-    const { data, error } = await supabase
-      .from('bills')
-      .update({ payment_done: true })
-      .eq('id', billId);
-
-    if (error) {
-      throw new Error('Error updating payment status');
-    }
-
-    // Update local state
-    setBillHistory((prevBills) =>
-      prevBills.map((bill) =>
-        bill.id === billId ? { ...bill, payment_done: true } : bill
-      )
-    );
-  } catch (error) {
-    console.error('Error marking payment as done:', error);
-  }
-};
 
   return (
     <div className="h-2">
       {/* Header Section */}
       <div className="flex justify-between items-center ">
-
-    <div className="flex space-x-5 mb-4">
+        <div className="flex space-x-5 mb-4">
           <div className="">
-     
           </div>
           <AlertNotification />
-      
         </div>
-
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Enter Bill Details Section */}
         <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden">
@@ -383,7 +401,6 @@ const handlePaymentDone = async (billId) => {
             <CardTitle className="text-2xl">Enter Bill Details</CardTitle>
           </CardHeader>
           <CardContent className="px-6">
-            {/* Date Range Selection */}
             <div className="mb-6">
               <Label
                 htmlFor="dateRange"
@@ -428,7 +445,6 @@ const handlePaymentDone = async (billId) => {
               </Popover>
             </div>
 
-            {/* Client Selection */}
             <div className="mb-6">
               <Label
                 htmlFor="client-select"
@@ -473,7 +489,6 @@ const handlePaymentDone = async (billId) => {
               </Popover>
             </div>
 
-            {/* Client Details Textarea */}
             <div className="mb-6">
               <Label
                 htmlFor="client-details"
@@ -491,7 +506,6 @@ const handlePaymentDone = async (billId) => {
               />
             </div>
 
-            {/* Bill Items */}
             {items.map((item, index) => (
               <div key={index} className="flex -mx-2 mb-4">
                 <div className="w-full md:w-1/2 px-2 mb-4 md:mb-0">
@@ -547,7 +561,6 @@ const handlePaymentDone = async (billId) => {
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                {/* Delete Button */}
                 <div className="flex items-center justify-center w-full md:w-auto px-2">
                   <Button
                     variant="destructive"
@@ -561,7 +574,6 @@ const handlePaymentDone = async (billId) => {
               </div>
             ))}
 
-            {/* Add Item Button */}
             <Button
               onClick={addItem}
               variant="outline"
@@ -570,7 +582,6 @@ const handlePaymentDone = async (billId) => {
               Add Item
             </Button>
 
-            {/* Additional Bills Section */}
             <div className="mb-6">
               <Label className="block text-sm font-medium text-gray-700 mb-2">
                 Additional Bills
@@ -587,7 +598,7 @@ const handlePaymentDone = async (billId) => {
                     className={`flex-grow ${
                       bill.isBalance ? "bg-gray-100 cursor-not-allowed" : ""
                     }`}
-                    readOnly={bill.isBalance} // Make read-only if it's a balance entry
+                    readOnly={bill.isBalance}
                   />
                   <Input
                     type="number"
@@ -599,7 +610,7 @@ const handlePaymentDone = async (billId) => {
                     className={`w-32 ${
                       bill.isBalance ? "bg-gray-100 cursor-not-allowed" : ""
                     }`}
-                    readOnly={bill.isBalance} // Make read-only if it's a balance entry
+                    readOnly={bill.isBalance}
                   />
                 </div>
               ))}
@@ -612,7 +623,6 @@ const handlePaymentDone = async (billId) => {
               </Button>
             </div>
 
-            {/* Total Input */}
             <div className="mb-6">
               <Label
                 htmlFor="manual-total"
@@ -629,7 +639,6 @@ const handlePaymentDone = async (billId) => {
               />
             </div>
 
-            {/* PrintUI Component */}
             <PrintUI
               items={items}
               total={manualTotal}
@@ -650,13 +659,11 @@ const handlePaymentDone = async (billId) => {
           </CardContent>
         </Card>
 
-        {/* Bill History Section */}
         <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden">
           <CardHeader className="text-black">
             <CardTitle className="text-2xl">Bill History</CardTitle>
           </CardHeader>
           <CardContent className="px-6">
-            {/* Search Bar */}
             <div className="mb-4">
               <Label
                 htmlFor="search"
@@ -674,114 +681,98 @@ const handlePaymentDone = async (billId) => {
               />
             </div>
 
-            {/* Bill History Table */}
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Client Details</TableHead>
                   <TableHead>Total</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-  {filteredBillHistory.map((bill) => (
-    <TableRow key={bill.id}>
-      <TableCell>{bill.date}</TableCell>
-      <TableCell>
-        {bill.client_details
-          ? bill.client_details.split(' ').slice(0, 2).join(' ')
-          : ''}
-      </TableCell>
-      <TableCell>₹{bill.total}</TableCell>
-      <TableCell>
-        {bill.payment_done ? (
-        
-          <span className="text-green-500">Done</span>
-        ) : (
-          <span className="text-red-500">Pending</span>
-        )}
-      </TableCell>
-      <TableCell>
-        {/* Menubar for Actions */}
-        <Menubar>
-      <MenubarMenu>
-        <MenubarTrigger>
-          <EllipsisVertical className="h-4 w-4" />
-        </MenubarTrigger>
-        <MenubarContent>
-          {/* View Action */}
-          <MenubarItem
-            onSelect={() => {
-              setViewBill(bill);
-              setIsViewOpen(true);
-            }}
-            className="flex items-center space-x-2"
-          >
-            <Eye className="h-4 w-4" />
-            <span>View</span>
-          </MenubarItem>
-
-          {/* Delete Action */}
-          <MenubarItem
-            onSelect={() => handleDeleteBill(bill.id)}
-            className="flex items-center space-x-2 text-red-500"
-          >
-            <Trash2 className="h-4 w-4 text-red-500" />
-            <span>Delete</span>
-          </MenubarItem>
-
-          <MenubarSeparator />
-
-          {/* Payment Mode Action */}
-          <MenubarItem
-            onSelect={() => {
-              setCurrentBillId(bill.id);
-              setIsPaymentModeOpen(true);
-            }}
-            className="flex items-center space-x-2"
-          >
-            <Wallet className="h-4 w-4" />
-            <span>Payment Mode</span>
-          </MenubarItem>
-
-          {/* Balance Action */}
-          <MenubarItem
-            onSelect={() => {
-              setCurrentBillId(bill.id);
-              setIsBalanceOpen(true);
-            }}
-            className="flex items-center space-x-2"
-          >
-            <DollarSign className="h-4 w-4" />
-            <span>Balance</span>
-          </MenubarItem>
-
-          <MenubarSeparator />
-
-          {/* Payment Done Action */}
-          <MenubarItem
-            onSelect={() => handlePaymentDone(bill.id)}
-            className="flex items-center justify-between space-x-2"
-          >
-            <span>Payment Done</span>
-            {bill.payment_done && <Check className="ml-2 h-4 w-4 text-green-500" />}
-          </MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-    </Menubar>
-
-      </TableCell>
-    </TableRow>
-  ))}
-</TableBody>
-
+                {filteredBillHistory.map((bill) => (
+                  <TableRow key={bill.id}>
+                    <TableCell>{bill.date}</TableCell>
+                    <TableCell>
+                      {bill.client_details
+                        ? bill.client_details.split(' ').slice(0, 2).join(' ')
+                        : ''}
+                    </TableCell>
+                    <TableCell>₹{bill.total}</TableCell>
+                    <TableCell>
+                      {bill.payment_done ? (
+                        <span className="text-green-500">Done</span>
+                      ) : (
+                        <span className="text-red-500">Pending</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Menubar>
+                        <MenubarMenu>
+                          <MenubarTrigger>
+                            <EllipsisVertical className="h-4 w-4" />
+                          </MenubarTrigger>
+                          <MenubarContent>
+                            <MenubarItem
+                              onSelect={() => {
+                                setViewBill(bill);
+                                setIsViewOpen(true);
+                              }}
+                              className="flex items-center space-x-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span>View</span>
+                            </MenubarItem>
+                            <MenubarItem
+                              onSelect={() => handleDeleteBill(bill.id)}
+                              className="flex items-center space-x-2 text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                              <span>Delete</span>
+                            </MenubarItem>
+                            <MenubarSeparator />
+                            <MenubarItem
+                              onSelect={() => {
+                                setCurrentBillId(bill.id);
+                                setIsPaymentModeOpen(true);
+                              }}
+                              className="flex items-center space-x-2"
+                            >
+                              <Wallet className="h-4 w-4" />
+                              <span>Payment Mode</span>
+                            </MenubarItem>
+                            <MenubarItem
+                              onSelect={() => {
+                                setCurrentBillId(bill.id);
+                                setIsBalanceOpen(true);
+                              }}
+                              className="flex items-center space-x-2"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                              <span>Balance</span>
+                            </MenubarItem>
+                            <MenubarSeparator />
+                            <MenubarItem
+                              onSelect={() => handlePaymentDone(bill.id)}
+                              className="flex items-center justify-between space-x-2"
+                            >
+                              <span>Payment Done</span>
+                              {bill.payment_done && <Check className="ml-2 h-4 w-4 text-green-500" />}
+                            </MenubarItem>
+                          </MenubarContent>
+                        </MenubarMenu>
+                      </Menubar>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </CardContent>
         </Card>
       </div>
 
-      {/* Payment Mode Dialog */}
       <Dialog open={isPaymentModeOpen} onOpenChange={setIsPaymentModeOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -813,7 +804,6 @@ const handlePaymentDone = async (billId) => {
         </DialogContent>
       </Dialog>
 
-      {/* Balance Dialog */}
       <Dialog open={isBalanceOpen} onOpenChange={setIsBalanceOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -845,7 +835,6 @@ const handlePaymentDone = async (billId) => {
         </DialogContent>
       </Dialog>
 
-      {/* View Bill Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -910,7 +899,6 @@ const handlePaymentDone = async (billId) => {
           )}
         </DialogContent>
       </Dialog>
-
     </div>
   );
 };

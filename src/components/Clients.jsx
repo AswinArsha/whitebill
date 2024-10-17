@@ -1,6 +1,6 @@
 // Client.jsx
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, ChevronRight, ChevronLeft, Plus, Check, X } from 'lucide-react';
+import { Edit, Trash2, ChevronRight, ChevronLeft, Plus, Check, X, MoreVertical } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { supabase } from '../supabase';
 import {
@@ -31,10 +31,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/use-toast';
-
-import AlertNotification from "./AlertNotification";
 import { Textarea } from "@/components/ui/textarea";
+import AlertNotification from "./AlertNotification";
+
+// Import react-hot-toast
+import toast, { Toaster } from 'react-hot-toast';
+
+// Import DropdownMenu components
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Client = ({ role, userId }) => {
   const [columns, setColumns] = useState([]);
@@ -44,7 +53,6 @@ const Client = ({ role, userId }) => {
   const [expandedColumns, setExpandedColumns] = useState([
     'Lead', 'Contacted', 'Proposal', 'Won', 'Lost'
   ]);
-  const { toast } = useToast();
 
   useEffect(() => {
     fetchClients();
@@ -58,11 +66,7 @@ const Client = ({ role, userId }) => {
 
     if (error) {
       console.error('Error fetching clients:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load clients.',
-        variant: 'destructive',
-      });
+      toast.error('Failed to load clients.');
     } else {
       const categorizedData = [
         { name: 'Lead', color: 'yellow', bgColor: 'bg-yellow-50', clients: [] },
@@ -91,35 +95,20 @@ const Client = ({ role, userId }) => {
         .eq('id', client.id);
 
       if (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to update client.',
-          variant: 'destructive',
-        });
+        toast.error('Failed to update client.');
       } else {
-        toast({
-          title: 'Success',
-          description: 'Client updated successfully.',
-          variant: 'positive',
-        });
+        toast.success('Client updated successfully! ✏️');
       }
     } else {
       const { data, error } = await supabase
         .from('clients')
-        .insert([{ ...client, order: 0 }]);
+        .insert([{ ...client, order: 0 }])
+        .select();  // Use .select() to ensure it returns the inserted row
 
       if (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to add client.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: 'Client added successfully.',
-          variant: 'positive',
-        });
+        toast.error('Failed to add client.');
+      } else if (data && data.length > 0) { // Check if data is returned and has at least one item
+        toast.success('Client added successfully! 🎉');
 
         // Insert at the start of the relevant column
         const updatedColumns = columns.map(column => {
@@ -133,10 +122,12 @@ const Client = ({ role, userId }) => {
         });
 
         setColumns(updatedColumns);
+      } else {
+        toast.error('No client data returned after insertion.');
       }
     }
 
-    fetchClients();
+    fetchClients(); // Refresh client list
     setSelectedClient(null);
   };
 
@@ -144,17 +135,9 @@ const Client = ({ role, userId }) => {
     const { error } = await supabase.from('clients').delete().eq('id', id);
 
     if (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete client.',
-        variant: 'destructive',
-      });
+      toast.error('Failed to delete client.');
     } else {
-      toast({
-        title: 'Success',
-        description: 'Client deleted successfully.',
-        variant: 'positive',
-      });
+      toast.success('Client deleted successfully! 🗑️');
     }
 
     fetchClients();
@@ -162,62 +145,57 @@ const Client = ({ role, userId }) => {
 
   const onDragEnd = async (result) => {
     const { source, destination } = result;
-
+  
     if (!destination) return;
-
+  
     const sourceColumnIndex = columns.findIndex(column => column.name === source.droppableId);
     const destinationColumnIndex = columns.findIndex(column => column.name === destination.droppableId);
-
+  
     const sourceColumn = columns[sourceColumnIndex];
     const destinationColumn = columns[destinationColumnIndex];
-
+  
     const sourceItems = Array.from(sourceColumn.clients);
-    const [removed] = sourceItems.splice(source.index, 1);
-
+    const [removed] = sourceItems.splice(source.index, 1); // Removed client
+  
     if (sourceColumnIndex === destinationColumnIndex) {
+      // If it's within the same column
       sourceItems.splice(destination.index, 0, removed);
       const newColumns = [...columns];
       newColumns[sourceColumnIndex].clients = sourceItems;
       setColumns(newColumns);
-
+  
       // Update order in the database
       await updateClientOrder(sourceItems);
     } else {
+      // Moving to another column
       const destinationItems = Array.from(destinationColumn.clients);
-      // Insert at the destination index
       destinationItems.splice(destination.index, 0, removed);
-
+  
       const newColumns = [...columns];
       newColumns[sourceColumnIndex].clients = sourceItems;
       newColumns[destinationColumnIndex].clients = destinationItems;
       setColumns(newColumns);
-
+  
       removed.status = destination.droppableId.toLowerCase();
       const { error } = await supabase
         .from('clients')
         .update({ status: removed.status, order: 0 })
         .eq('id', removed.id);
-
+  
       if (error) {
         console.error('Error updating client status:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to update client status.',
-          variant: 'destructive',
-        });
+        toast.error(`Failed to update status of client ${removed.client_name}.`);
       } else {
-        toast({
-          title: 'Client Moved',
-          description: `Client moved to ${destination.droppableId}`,
-          variant: 'positive',
-        });
+        // Show the client name in the success message
+        toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`);
       }
-
+  
       // Update order in the database for both columns
       await updateClientOrder(sourceItems);
       await updateClientOrder(destinationItems);
     }
   };
+  
 
   const updateClientOrder = async (clients) => {
     const updates = clients.map((client, index) => ({
@@ -238,11 +216,7 @@ const Client = ({ role, userId }) => {
 
     if (error) {
       console.error('Error updating client order:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update client order.',
-        variant: 'destructive',
-      });
+      toast.error('Failed to update client order.');
     }
   };
 
@@ -284,14 +258,13 @@ const Client = ({ role, userId }) => {
 
   return (
     <div className="flex flex-col h-auto">
+      {/* Toaster for react-hot-toast */}
+      <Toaster position="bottom-center" reverseOrder={false} />
+
       {/* Header Section */}
       <div className="flex justify-between items-center mb-4">
-       
-
         <div className="flex space-x-5">
-         
           <AlertNotification />
-
         </div>
       </div>
 
@@ -303,12 +276,11 @@ const Client = ({ role, userId }) => {
             placeholder="Search clients"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyUp={() => {}} // Removed handleSearch for simplicity
-            className="flex-grow"
+            className="flex-grow text-sm"
           />
           <Button
             onClick={() => { setIsEditMode(false); setSelectedClient({ status: 'lead' }); }}
-            className="flex items-center space-x-2"
+            className="flex items-center space-x-1 text-sm px-3 py-2"
           >
             <Plus className="h-4 w-4" />
             <span>Add Client</span>
@@ -325,15 +297,15 @@ const Client = ({ role, userId }) => {
                     {...provided.droppableProps}
                     ref={provided.innerRef}
                     className={`flex flex-col ${
-                      expandedColumns.includes(column.name) ? 'w-[240px]' : 'w-[60px]'
-                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-4 rounded-lg shadow-md relative cursor-pointer ${
+                      expandedColumns.includes(column.name) ? 'w-[224px]' : 'w-[60px]'
+                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-3 rounded-lg shadow-sm relative cursor-pointer ${
                       snapshot.isDraggingOver ? 'bg-blue-100' : ''
                     }`}
                   >
                     {/* Column Header */}
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex justify-between items-center mb-1">
                       <h2
-                        className={`text-lg font-semibold truncate ${getTextColorClass(column.color)}`}
+                        className={`text-md font-semibold truncate ${getTextColorClass(column.color)}`}
                         onClick={() => toggleColumnExpansion(column.name)}
                       >
                         {expandedColumns.includes(column.name) ? column.name : ''}
@@ -344,16 +316,16 @@ const Client = ({ role, userId }) => {
                         aria-label={expandedColumns.includes(column.name) ? 'Collapse Column' : 'Expand Column'}
                       >
                         {expandedColumns.includes(column.name) ? (
-                          <ChevronLeft />
+                          <ChevronLeft className="h-4 w-4" />
                         ) : (
-                          <ChevronRight />
+                          <ChevronRight className="h-4 w-4" />
                         )}
                       </button>
                     </div>
 
                     {/* Column Content */}
                     {expandedColumns.includes(column.name) ? (
-                      <div className="flex-grow overflow-y-auto pr-2">
+                      <div className="flex-grow overflow-y-auto pr-1">
                         {column.clients.map((client, index) => (
                           <Draggable key={client.id} draggableId={client.id.toString()} index={index}>
                             {(provided, snapshot) => (
@@ -363,51 +335,41 @@ const Client = ({ role, userId }) => {
                                 {...provided.dragHandleProps}
                                 className={`mb-2 ${snapshot.isDragging ? 'opacity-75' : ''}`}
                               >
-                                <Card className="mb-2">
-                                  <CardHeader>
-                                    <p className="text-lg font-semibold">{client.client_name}</p>
-                                    <CardDescription>{client.name}</CardDescription>
-                                  </CardHeader>
-                                  <CardFooter className="flex justify-end space-x-2">
-                                    {/* Edit Button */}
-                                    <Button
-                                      variant="ghost"
-                                      onClick={() => { setIsEditMode(true); setSelectedClient(client); }}
-                                      className="flex items-center space-x-2"
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                     
-                                    </Button>
-                                    
-                                    {/* Delete Button */}
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
+                                <Card className="p-2 text-sm rounded-md shadow-none border border-gray-200">
+                                  <CardHeader className="flex flex-row justify-between items-center p-0">
+                                  
+                                    <div>
+                                      <p className="font-semibold">{client.client_name}</p>
+                                      <p className="text-xs text-gray-600">{client.name}</p>
+                                    </div>
+                                    {/* Dropdown Menu */}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
                                         <Button
                                           variant="ghost"
-                                          className="flex items-center space-x-2 text-red-600 hover:bg-red-100"
+                                          size="icon"
+                                          className="p-1 rounded-full hover:bg-gray-200"
+                                          aria-label="Actions"
                                         >
-                                          <Trash2 className="h-4 w-4" />
-                                          
+                                          <MoreVertical className="h-4 w-4" />
                                         </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>
-                                            Are you sure you want to delete this client?
-                                          </AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>
-                                            Delete
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </CardFooter>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-32">
+                                        <DropdownMenuItem
+                                          onClick={() => { setIsEditMode(true); setSelectedClient(client); }}
+                                          className="flex items-center cursor-pointer space-x-2"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                          <span>Edit</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="flex cursor-pointer items-center space-x-2 text-red-600" onClick={() => { /* Trigger delete dialog */ }}>
+                                          <Trash2 className="h-4 w-4" />
+                                          <span>Delete</span>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  
+                                  </CardHeader>
                                 </Card>
                               </div>
                             )}
@@ -418,7 +380,7 @@ const Client = ({ role, userId }) => {
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <div className="transform -rotate-90 whitespace-nowrap">
-                          <p className={`text-sm font-semibold text-center ${getTextColorClass(column.color)}`}>
+                          <p className={`text-xs font-semibold text-center ${getTextColorClass(column.color)}`}>
                             {column.name}
                           </p>
                         </div>
@@ -439,7 +401,7 @@ const Client = ({ role, userId }) => {
             <DialogHeader>
               <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
             </DialogHeader>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Client Name */}
               <div>
                 <Label htmlFor="client_name">Client Name</Label>
@@ -449,6 +411,7 @@ const Client = ({ role, userId }) => {
                   value={selectedClient.client_name || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, client_name: e.target.value })}
                   required
+                  className="text-sm"
                 />
               </div>
 
@@ -461,6 +424,7 @@ const Client = ({ role, userId }) => {
                   value={selectedClient.name || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, name: e.target.value })}
                   required
+                  className="text-sm"
                 />
               </div>
 
@@ -472,6 +436,7 @@ const Client = ({ role, userId }) => {
                   placeholder="Company Name"
                   value={selectedClient.company || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, company: e.target.value })}
+                  className="text-sm"
                 />
               </div>
 
@@ -483,6 +448,7 @@ const Client = ({ role, userId }) => {
                   placeholder="Phone Number"
                   value={selectedClient.phone || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, phone: e.target.value })}
+                  className="text-sm"
                 />
               </div>
 
@@ -494,6 +460,7 @@ const Client = ({ role, userId }) => {
                   placeholder="Location"
                   value={selectedClient.location || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, location: e.target.value })}
+                  className="text-sm"
                 />
               </div>
 
@@ -505,22 +472,23 @@ const Client = ({ role, userId }) => {
                   placeholder="Remarks"
                   value={selectedClient.remarks || ''}
                   onChange={(e) => setSelectedClient({ ...selectedClient, remarks: e.target.value })}
-                  rows={4}
+                  rows={3}
+                  className="text-sm"
                 />
               </div>
             </form>
-            <div className="mt-4 flex justify-end space-x-2">
+            <div className="mt-3 flex justify-end space-x-2">
               <Button
                 variant="outline"
                 onClick={() => setSelectedClient(null)}
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-1 text-sm px-3 py-1.5"
               >
                 <X className="h-4 w-4" />
                 <span>Cancel</span>
               </Button>
               <Button
                 onClick={() => handleAddOrUpdateClient(selectedClient)}
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-1 text-sm px-3 py-1.5"
               >
                 <Check className="h-4 w-4" />
                 <span>{isEditMode ? 'Save Changes' : 'Add Client'}</span>
@@ -528,6 +496,29 @@ const Client = ({ role, userId }) => {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Delete Confirmation AlertDialog */}
+      {selectedClient && !isEditMode && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" className="hidden"></Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Client</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this client? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { handleDeleteClient(selectedClient.id); setSelectedClient(null); }}>
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

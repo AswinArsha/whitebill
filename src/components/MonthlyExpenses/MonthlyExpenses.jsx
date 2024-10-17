@@ -1,7 +1,9 @@
+// MonthlyExpenses.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import toast, { Toaster } from 'react-hot-toast';
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -113,15 +115,11 @@ const MonthlyExpenses = ({ role, userId }) => {
   }, [fetchTransactions]);
 
   const handleAddEditTransaction = async () => {
-    if (
-      currentTransaction.title &&
-      currentTransaction.category &&
-      currentTransaction.type
-    ) {
-      // Ensure date is always set; if not, set it to today's date
-      const transactionDate = currentTransaction.date
+    if (currentTransaction.title && currentTransaction.category && currentTransaction.type) {
+      // Ensure date is a valid Date object
+      const transactionDate = currentTransaction.date instanceof Date
         ? currentTransaction.date
-        : new Date();
+        : new Date(currentTransaction.date || new Date()); // Convert to Date if it's not already a Date
   
       const transactionData = {
         title: currentTransaction.title,
@@ -140,6 +138,7 @@ const MonthlyExpenses = ({ role, userId }) => {
           .eq("id", currentTransaction.id);
         if (error) {
           console.error("Error updating transaction:", error);
+          toast.error("Failed to update transaction. Please try again.");
         } else {
           setTransactions((current) =>
             current.map((transaction) =>
@@ -148,6 +147,7 @@ const MonthlyExpenses = ({ role, userId }) => {
                 : transaction
             )
           );
+          toast.success('Transaction updated successfully! ✏️');
         }
       } else {
         // Add new transaction
@@ -157,8 +157,10 @@ const MonthlyExpenses = ({ role, userId }) => {
           .select();
         if (error) {
           console.error("Error adding transaction:", error);
+          toast.error("Failed to add transaction. Please try again.");
         } else {
           setTransactions((current) => [...current, ...data]);
+          toast.success('Transaction added successfully! 🎉');
         }
       }
   
@@ -166,20 +168,24 @@ const MonthlyExpenses = ({ role, userId }) => {
       setCurrentTransaction(null);
     }
   };
+
   
 
   const handleDeleteTransaction = async (id) => {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
     if (error) {
       console.error("Error deleting transaction:", error);
+      toast.error("Failed to delete transaction. Please try again.");
     } else {
       setTransactions((current) =>
         current.filter((transaction) => transaction.id !== id)
       );
+      toast.success('Transaction deleted successfully! 🗑️');
     }
     setIsAlertOpen(false);
     setTransactionToDelete(null);
   };
+  
 
   const handleSearch = useCallback(() => {
     fetchTransactions();
@@ -264,6 +270,7 @@ const MonthlyExpenses = ({ role, userId }) => {
 
   return (
     <div>
+      <Toaster position="bottom-center" reverseOrder={false} />
        <div className="flex  justify-between items-center ">
 
         <div className="flex space-x-5 mb-4">

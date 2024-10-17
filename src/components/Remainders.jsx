@@ -38,7 +38,8 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AlertNotification from "./AlertNotification";
 
-import { useToast } from "@/components/ui/use-toast";
+// Import react-hot-toast
+import toast, { Toaster } from 'react-hot-toast';
 
 // Define the time zone for India
 const timeZone = "Asia/Kolkata";
@@ -53,7 +54,6 @@ const Remainders = ({ role, userId }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  const { toast } = useToast();
 
   useEffect(() => {
     fetchReminders();
@@ -77,11 +77,7 @@ const Remainders = ({ role, userId }) => {
       .eq("completed", false);
     if (error) {
       console.error("Error fetching reminders:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load reminders.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load reminders.");
     } else {
       setReminders(data);
     }
@@ -92,11 +88,7 @@ const Remainders = ({ role, userId }) => {
       .eq("completed", true);
     if (completedError) {
       console.error("Error fetching completed reminders:", completedError);
-      toast({
-        title: "Error",
-        description: "Failed to load completed reminders.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load completed reminders.");
     } else {
       setCompletedReminders(completedData);
     }
@@ -104,11 +96,7 @@ const Remainders = ({ role, userId }) => {
 
   const saveReminder = async () => {
     if (!title || !date || !time) {
-      toast({
-        title: "Missing Fields",
-        description: "Please fill in all fields.",
-        variant: "destructive",
-      });
+      toast.error("Please fill in all fields.");
       return;
     }
 
@@ -129,15 +117,14 @@ const Remainders = ({ role, userId }) => {
       recurrence_interval: isRecurring ? "monthly" : "none",
     };
 
-    const { data, error } = await supabase.from("reminders").insert([newReminder]);
+    // Add .select() to retrieve the inserted data
+    const { data, error } = await supabase.from("reminders").insert([newReminder]).select();
+
+    console.log("Insert Response:", data, error); // Debugging line
 
     if (error) {
       console.error("Error saving reminder:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save reminder.",
-        variant: "destructive",
-      });
+      toast.error("Failed to save reminder.");
       return;
     }
 
@@ -146,18 +133,10 @@ const Remainders = ({ role, userId }) => {
       setDate(new Date()); // Reset to current date
       setTime("");
       setIsRecurring(false);
-      toast({
-        title: "Success",
-        description: "Reminder added successfully.",
-        variant: "positive",
-      });
+      toast.success("Reminder added successfully.");
     } else {
       console.error("No data returned after insert.");
-      toast({
-        title: "Error",
-        description: "Failed to save reminder.",
-        variant: "destructive",
-      });
+      toast.error("Failed to save reminder.");
     }
     setOpen(false);
   };
@@ -187,11 +166,7 @@ const Remainders = ({ role, userId }) => {
 
     if (error) {
       console.error("Error saving notification:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save notification.",
-        variant: "destructive",
-      });
+      toast.error("Failed to save notification.");
       return;
     }
   };
@@ -204,22 +179,14 @@ const Remainders = ({ role, userId }) => {
 
     if (error) {
       console.error("Error completing reminder:", error);
-      toast({
-        title: "Error",
-        description: "Failed to complete reminder.",
-        variant: "destructive",
-      });
+      toast.error("Failed to complete reminder.");
       return;
     }
 
     setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
     setCompletedReminders((prev) => [...prev, { ...reminder, completed: true }]);
 
-    toast({
-      title: "Reminder Completed",
-      description: `${reminder.title} has been marked as completed.`,
-      variant: "positive",
-    });
+    toast.success(`${reminder.title} has been marked as completed.`);
 
     // If the reminder is recurring, create the next occurrence
     if (reminder.is_recurring && reminder.recurrence_interval === "monthly") {
@@ -237,22 +204,14 @@ const Remainders = ({ role, userId }) => {
 
       const { data: newData, error: newError } = await supabase
         .from("reminders")
-        .insert([newReminder]);
+        .insert([newReminder]).select(); // Include .select() if you need the inserted data
 
       if (newError) {
         console.error("Error creating recurring reminder:", newError);
-        toast({
-          title: "Error",
-          description: "Failed to create recurring reminder.",
-          variant: "destructive",
-        });
+        toast.error("Failed to create recurring reminder.");
       } else {
         setReminders((prev) => [...prev, ...newData]);
-        toast({
-          title: "Recurring Reminder",
-          description: "Next occurrence has been scheduled.",
-          variant: "default",
-        });
+        toast("Next occurrence has been scheduled."); // Default toast
       }
     }
   };
@@ -277,22 +236,14 @@ const Remainders = ({ role, userId }) => {
 
     if (error) {
       console.error("Error deleting reminder:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete reminder.",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete reminder.");
       return;
     }
 
     setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
     setCompletedReminders((prev) => prev.filter((reminder) => reminder.id !== id));
 
-    toast({
-      title: "Success",
-      description: "Reminder deleted successfully.",
-      variant: "positive",
-    });
+    toast.success("Reminder deleted successfully.");
   };
 
   const filteredReminders = reminders.filter((reminder) =>
@@ -314,10 +265,12 @@ const Remainders = ({ role, userId }) => {
     }
     setOpen(isOpen);
   };
-  
 
   return (
     <div className="flex flex-col h-auto">
+      {/* Toaster for react-hot-toast */}
+      <Toaster position="bottom-center" reverseOrder={false} />
+
       {/* Header Section */}
       <div className="flex justify-between items-center mb-4">
         {/* Additional header content if needed */}

@@ -388,7 +388,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
           <CardHeader>
             <CardTitle>Attendance Details</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-auto max-h-[400px]">
+          <CardContent className="overflow-auto max-h-[460px]">
             <Table className="relative">
               <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>

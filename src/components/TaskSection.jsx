@@ -40,7 +40,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, isToday } from "date-fns";
 import AlertNotification from "./AlertNotification";
 
-import { useToast } from "@/components/ui/use-toast";
+// Import react-hot-toast
+import toast, { Toaster } from 'react-hot-toast';
 
 function TaskList({ tasks, toggleTask, deleteTask, editTask, viewTask, isAdmin }) {
   const tasksByDate = tasks.reduce((acc, task) => {
@@ -123,7 +124,6 @@ function TaskDialog({ task, isOpen, addTask, updateTask, onClose, employees, isA
   const [assignedUsers, setAssignedUsers] = useState([]);
   const [comboBoxOpen, setComboBoxOpen] = useState(false);
   const [date, setDate] = useState(new Date());
-  const { toast } = useToast();
 
   // Synchronize state with task prop
   useEffect(() => {
@@ -155,17 +155,11 @@ function TaskDialog({ task, isOpen, addTask, updateTask, onClose, employees, isA
         addTask(taskData);
       }
       onClose();
-      toast({
-        title: task ? "Task Updated" : "Task Added",
-        description: `The task has been ${task ? "updated" : "added"} successfully.`,
-        variant: "success",
-      });
+      // Display success toast
+     
     } else {
-      toast({
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
+      // Display error toast
+      toast.error("Please fill in all required fields.");
     }
   };
 
@@ -308,7 +302,7 @@ function TaskViewDialog({ task, onClose }) {
           <Label htmlFor="view-description">Description</Label>
           <Textarea
             id="view-description"
-            value={task.description || "N/A"}
+            value={task.description || ""}
             readOnly
             className="bg-gray-100"
           />
@@ -325,7 +319,7 @@ function TaskViewDialog({ task, onClose }) {
         <div>
           <Label>Assigned To</Label>
           <div className="bg-gray-100 p-2 rounded">
-            {task.assignedToNames.join(", ") || "N/A"}
+            {task.assignedToNames.join(", ") || ""}
           </div>
         </div>
         <div className="flex items-center">
@@ -343,14 +337,13 @@ function TaskViewDialog({ task, onClose }) {
   );
 }
 
-export default function TaskSection({ role, userId, onTasksRead }) {
+export  function TaskSection({ role, userId, onTasksRead }) {
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [filter, setFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [viewingTask, setViewingTask] = useState(null); // State for viewing task
-  const { toast } = useToast();
 
   const isAdmin = role === "admin";
 
@@ -358,6 +351,7 @@ export default function TaskSection({ role, userId, onTasksRead }) {
     fetchEmployees();
     fetchTasks();
     markTasksAsRead(); // Mark tasks as read when component mounts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, userId]);
 
   const fetchEmployees = async () => {
@@ -368,11 +362,7 @@ export default function TaskSection({ role, userId, onTasksRead }) {
       setEmployees(data);
     } catch (err) {
       console.error("Error fetching employees:", err);
-      toast({
-        title: "Error",
-        description: "Failed to fetch employees.",
-        variant: "destructive",
-      });
+      toast.error("Failed to fetch employees.");
     }
   };
 
@@ -443,11 +433,7 @@ export default function TaskSection({ role, userId, onTasksRead }) {
       );
     } catch (err) {
       console.error("Error fetching tasks:", err);
-      toast({
-        title: "Error",
-        description: "Failed to fetch tasks.",
-        variant: "destructive",
-      });
+      toast.error("Failed to fetch tasks.");
     }
   };
 
@@ -482,18 +468,10 @@ export default function TaskSection({ role, userId, onTasksRead }) {
       }
 
       fetchTasks();
-      toast({
-        title: "Success",
-        description: "Task added successfully.",
-        variant: "positive",
-      });
+      toast.success("Task added successfully! 🎉");
     } catch (err) {
       console.error("Error adding task:", err);
-      toast({
-        title: "Error",
-        description: "Failed to add task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to add task. Please try again.");
     }
   };
 
@@ -535,18 +513,10 @@ export default function TaskSection({ role, userId, onTasksRead }) {
       }
 
       fetchTasks();
-      toast({
-        title: "Success",
-        description: "Task updated successfully.",
-        variant: "positive",
-      });
+      toast.success("Task updated successfully! ✏️");
     } catch (err) {
       console.error("Error updating task:", err);
-      toast({
-        title: "Error",
-        description: "Failed to update task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to update task. Please try again.");
     }
   };
 
@@ -562,18 +532,10 @@ export default function TaskSection({ role, userId, onTasksRead }) {
         if (error) throw error;
 
         fetchTasks();
-        toast({
-          title: "Success",
-          description: `Task marked as ${task.completed ? "pending" : "completed"}.`,
-          variant: "default",
-        });
+        toast.success(`Task marked as ${task.completed ? "pending ⏳" : "completed ✅"}.`);
       } catch (err) {
         console.error("Error toggling task:", err);
-        toast({
-          title: "Error",
-          description: "Failed to update task status. Please try again.",
-          variant: "destructive",
-        });
+        toast.error("Failed to update task status. Please try again.");
       }
     }
   };
@@ -585,18 +547,10 @@ export default function TaskSection({ role, userId, onTasksRead }) {
       if (error) throw error;
 
       fetchTasks();
-      toast({
-        title: "Success",
-        description: "Task deleted successfully.",
-        variant: "positive",
-      });
+      toast.success("Task deleted successfully! 🗑️");
     } catch (err) {
       console.error("Error deleting task:", err);
-      toast({
-        title: "Error",
-        description: "Failed to delete task. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete task. Please try again.");
     }
   };
 
@@ -636,13 +590,13 @@ export default function TaskSection({ role, userId, onTasksRead }) {
 
   return (
     <div>
+      {/* Toaster for react-hot-toast */}
+      <Toaster position="bottom-center" reverseOrder={false} />
+
       {/* Header Section */}
       <div className="flex justify-between items-center">
-       
         <div className="flex space-x-5 mb-4">
-         
           <AlertNotification />
-      
         </div>
       </div>
 
@@ -711,3 +665,5 @@ export default function TaskSection({ role, userId, onTasksRead }) {
     </div>
   );
 }
+
+export default TaskSection;

@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import MarkAsDone from "./MarkAsDone";  // Make sure the path is correct
+
 
 import { supabase } from "../supabase";
 import {
@@ -50,7 +52,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Menu, Trash2, Plus, Save, Printer } from "lucide-react";
-
+import toast, { Toaster } from 'react-hot-toast';
 import AlertNotification from "./AlertNotification";
 import jsPDF from "jspdf";
 
@@ -306,16 +308,16 @@ const CalendarSection = ({ role, userId }) => {
           assigned_user_ids:
             role === "admin" ? newEvent.assignedUserIds : [userId],
         };
-
+  
         if (mode === 'edit' && role === "admin") {
           const { error } = await supabase
             .from("events")
             .update(eventToSubmit)
             .eq("id", newEvent.id);
-
+  
           if (error) {
             console.error("Error updating event:", error);
-            alert("Failed to update event. Please try again.");
+            toast.error("Failed to update event. Please try again.");
           } else {
             setEvents((currentEvents) =>
               currentEvents.map((event) =>
@@ -334,37 +336,29 @@ const CalendarSection = ({ role, userId }) => {
                       extendedProps: {
                         ...event.extendedProps,
                         ...eventToSubmit,
-                        assignedUserIds: eventToSubmit.assigned_user_ids || [],
+                        assignedUserIds:
+                          eventToSubmit.assigned_user_ids || [],
                       },
                     }
                   : event
               )
             );
             setIsModalOpen(false);
-            setMode(null);
-            setNewEvent({
-              id: "",
-              title: "",
-              description: "",
-              start: "",
-              end: "",
-              location: "",
-              category: "",
-              allDay: false,
-              isDone: false,
-              clientName: "",
-              assignedUserIds: [],
+            toast.success('Event updated successfully! ✏️', {
+              duration: 3000,
+        
             });
+            
           }
         } else if (mode === 'add' && role === "admin") {
           const { data, error } = await supabase
             .from("events")
             .insert([eventToSubmit])
             .select();
-
+  
           if (error) {
             console.error("Error adding event:", error);
-            alert("Failed to add event. Please try again.");
+            toast.error("Failed to add event. Please try again.");
           } else {
             const newFormattedEvent = {
               id: data[0].id,
@@ -385,75 +379,13 @@ const CalendarSection = ({ role, userId }) => {
             };
             setEvents((currentEvents) => [...currentEvents, newFormattedEvent]);
             setIsModalOpen(false);
-            setMode(null);
-            setNewEvent({
-              id: "",
-              title: "",
-              description: "",
-              start: "",
-              end: "",
-              location: "",
-              category: "",
-              allDay: false,
-              isDone: false,
-              clientName: "",
-              assignedUserIds: [],
+            toast.success('Event added successfully! 🎉', {
+              duration: 3000,
+           
             });
+            
           }
         }
-      }
-    } else if (mode === 'view' && role !== "admin") {
-      // Users can only update the 'is_done' status
-      const eventToUpdate = {
-        is_done: newEvent.isDone,
-      };
-
-      const { error } = await supabase
-        .from("events")
-        .update(eventToUpdate)
-        .eq("id", newEvent.id);
-
-      if (error) {
-        console.error("Error updating event status:", error);
-        alert("Failed to update event status. Please try again.");
-      } else {
-        setEvents((currentEvents) =>
-          currentEvents.map((event) =>
-            event.id === newEvent.id
-              ? {
-                  ...event,
-                  isDone: eventToUpdate.is_done,
-                  backgroundColor: getCategoryColor(
-                    event.extendedProps.category,
-                    eventToUpdate.is_done
-                  ),
-                  borderColor: getCategoryColor(
-                    event.extendedProps.category,
-                    eventToUpdate.is_done
-                  ),
-                  extendedProps: {
-                    ...event.extendedProps,
-                    isDone: eventToUpdate.is_done,
-                  },
-                }
-              : event
-          )
-        );
-        setIsModalOpen(false);
-        setMode(null);
-        setNewEvent({
-          id: "",
-          title: "",
-          description: "",
-          start: "",
-          end: "",
-          location: "",
-          category: "",
-          allDay: false,
-          isDone: false,
-          clientName: "",
-          assignedUserIds: [],
-        });
       }
     }
   };
@@ -464,32 +396,24 @@ const CalendarSection = ({ role, userId }) => {
         .from("events")
         .delete()
         .eq("id", newEvent.id);
-
+  
       if (error) {
         console.error("Error deleting event:", error);
-        alert("Failed to delete event. Please try again.");
+        toast.error("Failed to delete event. Please try again.");
       } else {
         setEvents((currentEvents) =>
           currentEvents.filter((event) => event.id !== newEvent.id)
         );
         setIsModalOpen(false);
-        setMode(null);
-        setNewEvent({
-          id: "",
-          title: "",
-          description: "",
-          start: "",
-          end: "",
-          location: "",
-          category: "",
-          allDay: false,
-          isDone: false,
-          clientName: "",
-          assignedUserIds: [],
+        toast.success('Event deleted successfully! 🗑️ ', {
+          duration: 3000,
+          
         });
+        
       }
     }
   };
+  
 
   const handleEventDrop = async (dropInfo) => {
     if (role !== "admin") return; // Only admins can move events
@@ -826,7 +750,16 @@ const CalendarSection = ({ role, userId }) => {
   };
 
   return (
+    
     <div>
+       <Toaster position="bottom-center" reverseOrder={false} />
+      {/* Custom CSS for FullCalendar popover */}
+      <style jsx>{`
+        .fc-popover {
+          z-index: 1000 !important; /* Set the z-index lower than the dialog's */
+        }
+      `}</style>
+
       {/* Header */}
       <div className="flex justify-between items-center ">
         <div className="flex space-x-5 mb-4">
@@ -894,7 +827,7 @@ const CalendarSection = ({ role, userId }) => {
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[460px] p-0">
+            <PopoverContent className="w-[460px] p-0 ">
               <Command>
                 <CommandInput placeholder="Search clients..." />
                 <CommandList>
@@ -940,7 +873,7 @@ const CalendarSection = ({ role, userId }) => {
               <SelectTrigger>
                 <SelectValue placeholder="Filter by Assigned User" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent >
                 <SelectItem value="all">All Users</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.value} value={String(user.value)}>
@@ -973,7 +906,7 @@ const CalendarSection = ({ role, userId }) => {
           handleCloseDialog();
         }
       }}>
-            <DialogContent className="max-w-3xl p-6 bg-white rounded-lg shadow-lg">
+            <DialogContent className="elative z-[1001] max-w-3xl p-6 bg-white rounded-lg shadow-lg">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-semibold mb-2">
                   {mode === "edit"
@@ -1055,7 +988,7 @@ const CalendarSection = ({ role, userId }) => {
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select a client" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent  className="relative z-[1050]">
                           {clients.map((client) => (
                             <SelectItem
                               key={client.value}
@@ -1069,7 +1002,141 @@ const CalendarSection = ({ role, userId }) => {
                     )}
                   </div>
                 </div>
+   {/* Category and Assign To */}
+   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Category */}
+                  <div>
+                    <Label
+                      htmlFor="category"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Category
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="category"
+                        value={newEvent.category}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.category}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, category: value })
+                        }
+                        required
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent  className="relative z-[1050]">
+                          {CATEGORIES.map((category) => (
+                            <SelectItem
+                              key={category.value}
+                              value={category.value}
+                            >
+                              {category.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {errors.category && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.category}
+                      </p>
+                    )}
+                  </div>
 
+                  {/* Assign To (Admin Only) */}
+                  {role === "admin" && mode !== "view" && (
+                    <div>
+                      <Label
+                        htmlFor="assignTo"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Assign To
+                      </Label>
+                      <Popover
+                        open={openDialogAssignCombobox}
+                        onOpenChange={setOpenDialogAssignCombobox}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openDialogAssignCombobox}
+                            className="mt-1 w-full justify-between"
+                            type="button"
+                          >
+                            {newEvent.assignedUserIds.length > 0
+                              ? users
+                                  .filter((user) =>
+                                    newEvent.assignedUserIds.includes(user.value)
+                                  )
+                                  .map((user) => user.label)
+                                  .join(", ")
+                              : "Assign to Users"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0 relative z-[1050]"> 
+                          <Command>
+                            <CommandInput placeholder="Search users..." />
+                            <CommandList>
+                              <CommandEmpty>No user found.</CommandEmpty>
+                              <CommandGroup>
+                                {users.map((user) => (
+                                  <CommandItem
+                                    key={user.value}
+                                    value={String(user.value)}
+                                    onSelect={(currentValue) => {
+                                      const numericValue = Number(currentValue);
+                                      if (
+                                        newEvent.assignedUserIds.includes(
+                                          numericValue
+                                        )
+                                      ) {
+                                        setNewEvent({
+                                          ...newEvent,
+                                          assignedUserIds:
+                                            newEvent.assignedUserIds.filter(
+                                              (id) => id !== numericValue
+                                            ),
+                                        });
+                                      } else {
+                                        setNewEvent({
+                                          ...newEvent,
+                                          assignedUserIds: [
+                                            ...newEvent.assignedUserIds,
+                                            numericValue,
+                                          ],
+                                        });
+                                      }
+                                      setOpenDialogAssignCombobox(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        newEvent.assignedUserIds.includes(user.value)
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {user.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+                </div>
                 {/* Remarks and Location */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Remarks */}
@@ -1133,159 +1200,17 @@ const CalendarSection = ({ role, userId }) => {
                   </div>
                 </div>
 
-                {/* Category and Assign To */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Category */}
-                  <div>
-                    <Label
-                      htmlFor="category"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Category
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="category"
-                        value={newEvent.category}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Select
-                        value={newEvent.category}
-                        onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, category: value })
-                        }
-                        required
-                        className="mt-1"
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((category) => (
-                            <SelectItem
-                              key={category.value}
-                              value={category.value}
-                            >
-                              {category.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {errors.category && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.category}
-                      </p>
-                    )}
-                  </div>
+             
 
-                  {/* Assign To (Admin Only) */}
-                  {role === "admin" && mode !== "view" && (
-                    <div>
-                      <Label
-                        htmlFor="assignTo"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Assign To
-                      </Label>
-                      <Popover
-                        open={openDialogAssignCombobox}
-                        onOpenChange={setOpenDialogAssignCombobox}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={openDialogAssignCombobox}
-                            className="mt-1 w-full justify-between"
-                            type="button"
-                          >
-                            {newEvent.assignedUserIds.length > 0
-                              ? users
-                                  .filter((user) =>
-                                    newEvent.assignedUserIds.includes(user.value)
-                                  )
-                                  .map((user) => user.label)
-                                  .join(", ")
-                              : "Assign to Users"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-full p-0">
-                          <Command>
-                            <CommandInput placeholder="Search users..." />
-                            <CommandList>
-                              <CommandEmpty>No user found.</CommandEmpty>
-                              <CommandGroup>
-                                {users.map((user) => (
-                                  <CommandItem
-                                    key={user.value}
-                                    value={String(user.value)}
-                                    onSelect={(currentValue) => {
-                                      const numericValue = Number(currentValue);
-                                      if (
-                                        newEvent.assignedUserIds.includes(
-                                          numericValue
-                                        )
-                                      ) {
-                                        setNewEvent({
-                                          ...newEvent,
-                                          assignedUserIds:
-                                            newEvent.assignedUserIds.filter(
-                                              (id) => id !== numericValue
-                                            ),
-                                        });
-                                      } else {
-                                        setNewEvent({
-                                          ...newEvent,
-                                          assignedUserIds: [
-                                            ...newEvent.assignedUserIds,
-                                            numericValue,
-                                          ],
-                                        });
-                                      }
-                                      setOpenDialogAssignCombobox(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        newEvent.assignedUserIds.includes(user.value)
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      )}
-                                    />
-                                    {user.label}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
-                </div>
+           {/* Mark as Done */}
+<MarkAsDone
+  isDone={newEvent.isDone}
+  eventId={newEvent.id}
+  setEvents={setEvents}
+  onMarkDone={() => setNewEvent({ ...newEvent, isDone: !newEvent.isDone })}
+/>
 
-                {/* Mark as Done */}
-                <div className="flex items-center">
-                  <Checkbox
-                    id="isDone"
-                    checked={newEvent.isDone}
-                    onCheckedChange={(checked) =>
-                      setNewEvent({ ...newEvent, isDone: checked })
-                    }
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                  />
-                  <Label
-                    htmlFor="isDone"
-                    className="ml-2 block text-sm text-gray-700"
-                  >
-                    Mark as Done
-                  </Label>
-                </div>
+
               </div>
 
               {/* Dialog Footer */}
@@ -1341,7 +1266,7 @@ const CalendarSection = ({ role, userId }) => {
         )}
 
         {/* FullCalendar Component */}
-        <div className="bg-white shadow-none">
+        <div className="bg-white shadow-none ">
           <FullCalendar
             ref={(element) => (calendarRef.current = element)}
             plugins={[
@@ -1370,6 +1295,7 @@ const CalendarSection = ({ role, userId }) => {
             timeZone="Asia/Kolkata"
             handleWindowResize={true}
             stickyHeaderDates={true}
+       
             dayMaxEvents={2}
             moreLinkClick="popover"
             eventTimeFormat={{
@@ -1379,8 +1305,9 @@ const CalendarSection = ({ role, userId }) => {
             }}
             dayCellClassNames="border-2 border-gray-300"
             eventClassNames="mb-1 font-semibold"
-            dayHeaderClassNames="bg-gray-200 text-gray-700 uppercase tracking-wider"
+            dayHeaderClassNames="bg-gray-200 text-gray-700 uppercase  "
             datesSet={handleMonthChange}
+          
           />
         </div>
       </Card>

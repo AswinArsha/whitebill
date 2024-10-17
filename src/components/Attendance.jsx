@@ -71,7 +71,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
+import toast, { Toaster } from 'react-hot-toast';
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
@@ -291,9 +291,9 @@ const Attendance = ({ role, userId }) => {
           ])
           .select()
           .single();
-
+  
         if (userError) throw userError;
-
+  
         // Reset form fields and close dialog
         setNewName("");
         setNewDepartment("");
@@ -302,17 +302,21 @@ const Attendance = ({ role, userId }) => {
         setNewPassword("");
         setNewRole("user");
         setIsDialogOpen(false);
-
+  
         // Refresh attendance data
         fetchAttendanceDataForMonth();
+  
+        // Show success toast
+        toast.success("Staff added successfully! 🎉");
       } catch (error) {
         console.error("Error adding new staff:", error);
-        alert("Failed to add new staff. Please try again.");
+        toast.error("Failed to add new staff. Please try again.");
       }
     } else {
-      alert("Please fill in all fields.");
+      toast.error("Please fill in all fields.");
     }
   };
+  
 
   const handleEditStaff = async () => {
     if (
@@ -330,67 +334,75 @@ const Attendance = ({ role, userId }) => {
           department: selectedUser.department.trim(),
           position: selectedUser.position.trim(),
         };
-
+  
         if (selectedUser.password?.trim()) {
           updateData.password = selectedUser.password.trim(); // Consider hashing
         }
-
+  
         // Update users table
         const { error: updateError } = await supabase
           .from("users")
           .update(updateData)
           .eq("id", selectedUser.id);
-
+  
         if (updateError) throw updateError;
-
+  
         // Close edit dialog
         setIsEditDialogOpen(false);
         setSelectedUser(null);
-
+  
         // Refresh attendance data
         fetchAttendanceDataForMonth();
+  
+        // Show success toast
+        toast.success("Staff updated successfully! ✏️");
       } catch (error) {
         console.error("Error editing staff:", error);
-        alert("Failed to edit staff. Please try again.");
+        toast.error("Failed to update staff. Please try again.");
       }
     } else {
-      alert("Please fill in all required fields.");
+      toast.error("Please fill in all required fields.");
     }
   };
+  
 
   const handleDeleteStaff = async () => {
     if (selectedUser) {
       try {
         // Begin deletion process
-
+  
         // 1. Delete attendance records
         const { error: attendanceError } = await supabase
           .from("attendance")
           .delete()
           .eq("user_id", selectedUser.id);
-
+  
         if (attendanceError) throw attendanceError;
-
+  
         // 2. Delete user record
         const { error: userError } = await supabase
           .from("users")
           .delete()
           .eq("id", selectedUser.id);
-
+  
         if (userError) throw userError;
-
+  
         // Close alert dialog and reset selectedUser
         setIsAlertDialogOpen(false);
         setSelectedUser(null);
-
+  
         // Refresh attendance data
         fetchAttendanceDataForMonth();
+  
+        // Show success toast
+        toast.success("Staff deleted successfully! 🗑️");
       } catch (error) {
         console.error("Error deleting staff and related records:", error);
-        alert("Failed to delete staff member. Please try again.");
+        toast.error("Failed to delete staff member. Please try again.");
       }
     }
   };
+  
 
   const openEditDialog = (user) => {
     setSelectedUser(user); // Set the selected user's full details
@@ -422,6 +434,8 @@ const Attendance = ({ role, userId }) => {
 
   return (
     <div className="h-auto">
+        <Toaster position="bottom-center" reverseOrder={false} />
+
       {/* Header */}
       <div className="flex justify-between items-center ">
 
@@ -634,9 +648,9 @@ const Attendance = ({ role, userId }) => {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
+          <Table className="bg-white rounded-xl ">
+            <TableHeader  >
+              <TableRow className="hover:bg-white" >
                 <TableHead>Name</TableHead>
                 <TableHead>Check In</TableHead>
                 <TableHead>Check Out</TableHead>
