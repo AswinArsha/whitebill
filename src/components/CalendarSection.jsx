@@ -61,28 +61,37 @@ const CATEGORIES = [
   { value: "meeting", label: "Meeting" },
   { value: "post", label: "Post" },
   { value: "editing", label: "Editing" },
-  { value: "ad_campaign", label: "Ad Campaign" }, // New Category
+  { value: "ad_campaign", label: "Ad Campaign" },
+  { value: "poster_design", label: "Poster Design" },
+  { value: "task", label: "Task" }, 
 ];
+
 
 const FILTER_CATEGORIES = [{ value: "all", label: "Filter by Category" }, ...CATEGORIES];
 
 const getCategoryColor = (category, isDone) => {
-  if (isDone) return "#4caf50";
+  if (isDone) return "#4caf50";  // Green for done events
   switch (category) {
     case "shoot":
-      return "#f06543";
+      return "#f06543";  // Red-Orange for shoot
     case "meeting":
-      return "#0582ca";
+      return "#0582ca";  // Blue for meeting
     case "post":
-      return "#f48c06";
+      return "#f48c06";  // Orange for post
     case "editing":
-      return "#9d4edd";
+      return "#9d4edd";  // Purple for editing
     case "ad_campaign":
-      return "#ad2831"; // Color for Ad Campaign
+      return "#ad2831";  // Dark red for ad campaign
+    case "poster_design":
+      return "#ffc300";  // Gold for poster design (new color)
+    case "task":
+      return "#335c67";  // BlueViolet for task (new color)
     default:
-      return "#6c757d";
+      return "#6c757d";  // Default gray
   }
 };
+
+
 
 const CalendarSection = ({ role, userId }) => {
   // Existing state variables
