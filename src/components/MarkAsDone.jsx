@@ -19,7 +19,6 @@ const compliments = [
   "Keep smashing those goals! 🎯",
   "You're a rockstar! 🎸",
   "Unstoppable energy! ⚡️",
-  "You're a force to be reckoned with! 💪",
   "What a legend! 🏆",
   "Boom! Another one down! 💥",
   "You’re making magic happen! ✨",

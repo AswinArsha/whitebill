@@ -73,21 +73,21 @@ const getCategoryColor = (category, isDone) => {
   if (isDone) return "#4caf50";  // Green for done events
   switch (category) {
     case "shoot":
-      return "#f06543";  // Red-Orange for shoot
+      return "#f06543";  
     case "meeting":
-      return "#0582ca";  // Blue for meeting
+      return "#0582ca";  
     case "post":
-      return "#f48c06";  // Orange for post
+      return "#f48c06"; 
     case "editing":
-      return "#9d4edd";  // Purple for editing
+      return "#9d4edd";  
     case "ad_campaign":
-      return "#ad2831";  // Dark red for ad campaign
+      return "#ad2831";  
     case "poster_design":
-      return "#ffc300";  // Gold for poster design (new color)
+      return "#ffc300";  
     case "task":
-      return "#335c67";  // BlueViolet for task (new color)
+      return "#335c67";  
     default:
-      return "#6c757d";  // Default gray
+      return "#6c757d";  
   }
 };
 
