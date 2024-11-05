@@ -1,3 +1,5 @@
+// components/Billing.jsx
+
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -20,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "../supabase"; // Ensure this is correctly initialized for v2
 import { v4 as uuidv4 } from "uuid";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Check, Eye, Wallet, DollarSign } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Check, Eye, Wallet, DollarSign   } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -51,14 +53,16 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { toWords } from 'number-to-words'; // Importing number-to-words library
 
 const Billing = ({ role, userId }) => {
   // State variables
   const [items, setItems] = useState([
-    { description: "Reels", quantity: "", numberOfDays: "", total: "" },
-    { description: "Posters", quantity: "", numberOfDays: "", total: "" },
-    { description: "Total Engagements", quantity: "", numberOfDays: "", total: "" },
-    { description: "Story", quantity: "", numberOfDays: "", total: "" }
+    { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
+    { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
+    { description: "Total Engagements", quantity: "", numberOfDays: "", rate: 0 },
+    { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
   ]);
   const [additionalBills, setAdditionalBills] = useState([]);
   const [outstandingBalance, setOutstandingBalance] = useState(0);
@@ -80,6 +84,10 @@ const Billing = ({ role, userId }) => {
   const [balanceAmount, setBalanceAmount] = useState("");
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [viewBill, setViewBill] = useState(null);
+
+  // New state variables for invoice number and creation date
+  const [invoiceNumber, setInvoiceNumber] = useState(null);
+  const [createdAt, setCreatedAt] = useState(null);
 
   useEffect(() => {
     fetchClients();
@@ -114,7 +122,7 @@ const Billing = ({ role, userId }) => {
   };
 
   const addItem = () => {
-    setItems([...items, { description: "", quantity: "", numberOfDays: "", total: "" }]);
+    setItems([...items, { description: "", quantity: "", numberOfDays: "", rate: 0 }]);
   };
 
   const addAdditionalBill = () => {
@@ -123,7 +131,7 @@ const Billing = ({ role, userId }) => {
 
   const updateItem = (index, field, value) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    newItems[index][field] = field === "rate" ? parseFloat(value) || 0 : value;
     setItems(newItems);
   };
 
@@ -142,53 +150,73 @@ const Billing = ({ role, userId }) => {
     setItems(newItems);
   };
 
-  const handleBillGenerated = async () => {
-    const formattedDate = dateRange?.from && dateRange?.to 
-      ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
-      : dateRange?.from
-      ? format(new Date(dateRange.from), "dd/MM/yyyy")
-      : format(new Date(), "dd/MM/yyyy");
-
-    const newBill = {
-      id: uuidv4(),
-      date: formattedDate,
-      total: parseFloat(manualTotal) || 0,
-      items: [...items],
-      client_details: clientDetails,
-      additional_bills: additionalBills,
-      payment_mode: "",
-      balance: 0
-    };
-
-    try {
-      const { data, error } = await supabase
-        .from('bills')
-        .insert([newBill]);
-
-      if (error || !data || !data[0]) {
-        console.error('Error saving bill:', error);
-        throw new Error('Bill creation failed');
+  const handleBillGenerated = () => {
+    return new Promise(async (resolve, reject) => {
+      // Format the date range
+      const formattedDate = dateRange?.from && dateRange?.to 
+        ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
+        : dateRange?.from
+        ? format(new Date(dateRange.from), "dd/MM/yyyy")
+        : format(new Date(), "dd/MM/yyyy");
+  
+      try {
+        // Convert total to number and handle NaN
+        const totalAmount = parseFloat(manualTotal) || 0;
+  
+        // Convert amount to words (for GST Invoice)
+        const amountInWords = toWords(Math.floor(totalAmount));
+  
+        // Prepare the new bill object without invoice_number
+        const newBill = {
+          id: uuidv4(),
+          date: formattedDate,
+          total: totalAmount,
+          items: [...items],
+          client_details: clientDetails,
+          additional_bills: additionalBills,
+          payment_mode: "",
+          balance: 0,
+        };
+  
+        // Insert the new bill into Supabase with .select()
+        const { data, error } = await supabase
+          .from('bills')
+          .insert([newBill])
+          .select(); // Ensure it returns the inserted row
+  
+        if (error || !data || !data[0]) {
+          console.error('Error saving bill:', error);
+          throw new Error('Bill creation failed');
+        }
+  
+        // Update state with new invoice number and creation date
+        setInvoiceNumber(data[0].invoice_number);
+        setCreatedAt(data[0].created_at);
+  
+        // Update bill history
+        setBillHistory([data[0], ...billHistory]);
+  
+        // Reset form fields
+        setItems([
+          { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
+          { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
+          { description: "Total Engagements", quantity: "", numberOfDays: "", rate: 0 },
+          { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
+        ]);
+        setClientDetails("");
+        setManualTotal(0);
+        setAdditionalBills([]);
+        setOutstandingBalance(0);
+        setIsBalanceAdded(false);
+  
+        resolve(newBill);
+      } catch (error) {
+        console.error('Error during bill generation:', error);
+        reject(error);
       }
-
-      setBillHistory([data[0], ...billHistory]);
-      setItems([
-        { description: "Reels", quantity: "", numberOfDays: "", total: "" },
-        { description: "Posters", quantity: "", numberOfDays: "", total: "" },
-        { description: "Total Engagements", quantity: "", numberOfDays: "", total: "" },
-        { description: "Story", quantity: "", numberOfDays: "", total: "" }
-      ]);
-      setClientDetails("");
-      setManualTotal(0);
-      setAdditionalBills([]);
-      setOutstandingBalance(0);
-      setIsBalanceAdded(false);
-
-      return newBill;
-    } catch (error) {
-      console.error('Error during bill generation:', error);
-      return null;
-    }
+    });
   };
+  
 
   const fetchBillHistory = async () => {
     const { data, error } = await supabase
@@ -205,12 +233,14 @@ const Billing = ({ role, userId }) => {
 
   const handleClientSelect = (client) => {
     setSelectedClient(client);
-    setClientDetails(`${client.company}\n${client.location}\n${client.phone}`);
+    const details = `${client.company}\n${client.location}\n${client.phone}`;
+    const gstinDetails = client.gstin ? `GSTIN: ${client.gstin}` : ""; // Check for GSTIN
+    setClientDetails(`${details}${gstinDetails ? `\n${gstinDetails}` : ""}`); // Include GSTIN if available
     setIsComboBoxOpen(false);
-
+  
     setAdditionalBills([]);
     setIsBalanceAdded(false);
-
+  
     fetchOutstandingBalance(client);
   };
 
@@ -220,14 +250,15 @@ const Billing = ({ role, userId }) => {
         .from('bills')
         .select('balance')
         .eq('client_details', `${client.company}\n${client.location}\n${client.phone}`)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('invoice_number', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') { // 'PGRST116' means no rows found
         console.error('Error fetching outstanding balance:', error);
         setOutstandingBalance(0);
-      } else if (data.length > 0 && data[0].balance > 0) {
-        const latestBalance = parseFloat(data[0].balance);
+      } else if (data && data.balance > 0) {
+        const latestBalance = parseFloat(data.balance);
         setOutstandingBalance(latestBalance);
         setAdditionalBills([{ name: "Balance", amount: latestBalance, isBalance: true }]);
         setIsBalanceAdded(true);
@@ -320,8 +351,9 @@ const Billing = ({ role, userId }) => {
       }
 
       // Extract the first two words from client_details
-      const clientDetails = billData.client_details || "";
-      const firstTwoWords = clientDetails.split(' ').slice(0, 2).join(' ');
+      const clientDetailsText = billData.client_details || "";
+      const clientNameMatch = clientDetailsText.match(/^(.*?)\n/);
+      const firstTwoWords = clientNameMatch ? clientNameMatch[1].split(' ').slice(0, 2).join(' ') : "Client";
 
       // Parse the total amount
       let totalAmount = parseFloat(billData.total);
@@ -334,7 +366,7 @@ const Billing = ({ role, userId }) => {
 
       // Get the current date in 'YYYY-MM-DD' format
       const paymentDate = new Date();
-      const formattedPaymentDate = paymentDate.toISOString().split('T')[0];
+      const formattedPaymentDate = format(paymentDate, 'yyyy-MM-dd');
 
       // Create a new transaction record
       const transactionData = {
@@ -343,7 +375,7 @@ const Billing = ({ role, userId }) => {
         date: formattedPaymentDate,
         type: 'income',
         category: 'other', // You can set a default category or modify as needed
-        description: ``,
+        description: `Payment for invoice ${billData.invoice_number}`,
       };
 
       // Insert the new transaction into the transactions table
@@ -383,6 +415,13 @@ const Billing = ({ role, userId }) => {
     bill.client_details.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Define the formatted date here before passing it to PrintUI
+  const formattedDate = dateRange?.from && dateRange?.to 
+    ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
+    : dateRange?.from
+    ? format(new Date(dateRange.from), "dd/MM/yyyy")
+    : format(new Date(), "dd/MM/yyyy");
+
   return (
     <div className="h-2">
       {/* Header Section */}
@@ -401,6 +440,7 @@ const Billing = ({ role, userId }) => {
             <CardTitle className="text-2xl">Enter Bill Details</CardTitle>
           </CardHeader>
           <CardContent className="px-6">
+            {/* Date Range Selection */}
             <div className="mb-6">
               <Label
                 htmlFor="dateRange"
@@ -445,6 +485,7 @@ const Billing = ({ role, userId }) => {
               </Popover>
             </div>
 
+            {/* Client Selection */}
             <div className="mb-6">
               <Label
                 htmlFor="client-select"
@@ -489,6 +530,7 @@ const Billing = ({ role, userId }) => {
               </Popover>
             </div>
 
+            {/* Client Details */}
             <div className="mb-6">
               <Label
                 htmlFor="client-details"
@@ -506,6 +548,7 @@ const Billing = ({ role, userId }) => {
               />
             </div>
 
+            {/* Items */}
             {items.map((item, index) => (
               <div key={index} className="flex -mx-2 mb-4">
                 <div className="w-full md:w-1/2 px-2 mb-4 md:mb-0">
@@ -582,6 +625,7 @@ const Billing = ({ role, userId }) => {
               Add Item
             </Button>
 
+            {/* Additional Bills */}
             <div className="mb-6">
               <Label className="block text-sm font-medium text-gray-700 mb-2">
                 Additional Bills
@@ -623,6 +667,7 @@ const Billing = ({ role, userId }) => {
               </Button>
             </div>
 
+            {/* Total */}
             <div className="mb-6">
               <Label
                 htmlFor="manual-total"
@@ -639,38 +684,29 @@ const Billing = ({ role, userId }) => {
               />
             </div>
 
+            {/* PrintUI Component */}
             <PrintUI
               items={items}
               total={manualTotal}
               additionalBills={additionalBills}
               onBillGenerated={handleBillGenerated}
-              date={
-                dateRange?.from && dateRange?.to
-                  ? `${format(
-                      new Date(dateRange.from),
-                      "dd/MM/yyyy"
-                    )} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}`
-                  : dateRange?.from
-                  ? format(new Date(dateRange.from), "dd/MM/yyyy")
-                  : format(new Date(), "dd/MM/yyyy")
-              }
+              date={formattedDate}
               clientDetails={clientDetails}
+              invoiceNumber={invoiceNumber}
+              createdAt={createdAt}
             />
           </CardContent>
         </Card>
 
+        {/* Bill History Section */}
         <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden">
           <CardHeader className="text-black">
             <CardTitle className="text-2xl">Bill History</CardTitle>
           </CardHeader>
           <CardContent className="px-6">
+            {/* Search */}
             <div className="mb-4">
-              <Label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Search Bill History
-              </Label>
+             
               <Input
                 id="search"
                 type="text"
@@ -681,6 +717,7 @@ const Billing = ({ role, userId }) => {
               />
             </div>
 
+            {/* Bill History Table */}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -694,10 +731,12 @@ const Billing = ({ role, userId }) => {
               <TableBody>
                 {filteredBillHistory.map((bill) => (
                   <TableRow key={bill.id}>
-                    <TableCell>{bill.date}</TableCell>
+                    <TableCell>
+                    {bill.created_at ? new Date(bill.created_at).toLocaleDateString() : bill.date}
+                    </TableCell>
                     <TableCell>
                       {bill.client_details
-                        ? bill.client_details.split(' ').slice(0, 2).join(' ')
+                        ? bill.client_details.split('\n')[0]
                         : ''}
                     </TableCell>
                     <TableCell>₹{bill.total}</TableCell>
@@ -773,43 +812,67 @@ const Billing = ({ role, userId }) => {
         </Card>
       </div>
 
+      {/* Payment Mode Dialog */}
       <Dialog open={isPaymentModeOpen} onOpenChange={setIsPaymentModeOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Select Payment Mode</DialogTitle>
-          </DialogHeader>
-          <Separator className="my-4" />
-          <div className="mt-4">
-            <RadioGroup value={paymentMode} onValueChange={setPaymentMode}>
-              <div className="flex items-center space-x-2 mb-2">
-                <RadioGroupItem value="Cash" id="cash" />
-                <Label htmlFor="cash">Cash</Label>
-              </div>
-              <div className="flex items-center space-x-2 mb-2">
-                <RadioGroupItem value="Swipe" id="swipe" />
-                <Label htmlFor="swipe">Swipe</Label>
-              </div>
-              <div className="flex items-center space-x-2 mb-2">
-                <RadioGroupItem value="GPay" id="gpay" />
-                <Label htmlFor="gpay">GPay</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          <Separator className="my-4" />
-          <div className="flex justify-end">
-            <Button onClick={handleUpdatePaymentMode} disabled={!paymentMode}>
-              Save
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+  <DialogContent className="sm:max-w-[400px] rounded-lg p-6 shadow-lg bg-white">
+    <DialogHeader className="text-center">
+      <DialogTitle className="text-lg font-semibold text-gray-800">Select Payment Mode</DialogTitle>
 
+    </DialogHeader>
+
+    
+    {/* Payment Options */}
+    <div className="mt-4 space-y-3">
+      <RadioGroup value={paymentMode} onValueChange={setPaymentMode} className="space-y-2">
+        
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Cash" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("Cash")}
+        >
+          <RadioGroupItem value="Cash" id="cash" className="hidden" />
+         
+          <Label htmlFor="cash" className="text-gray-700 font-medium">Cash</Label>
+        </div>
+        
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Swipe" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("Swipe")}
+        >
+          <RadioGroupItem value="Swipe" id="swipe" className="hidden" />
+      
+          <Label htmlFor="swipe" className="text-gray-700 font-medium">Swipe</Label>
+        </div>
+
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "GPay" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("GPay")}
+        >
+          <RadioGroupItem value="GPay" id="gpay" className="hidden" />
+        
+          <Label htmlFor="gpay" className="text-gray-700 font-medium">GPay</Label>
+        </div>
+        
+      </RadioGroup>
+    </div>
+
+   
+
+    {/* Save Button */}
+    <div className="flex justify-end">
+      <Button onClick={handleUpdatePaymentMode} disabled={!paymentMode} className="">
+        Save
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
+
+      {/* Balance Update Dialog */}
       <Dialog open={isBalanceOpen} onOpenChange={setIsBalanceOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Update Balance</DialogTitle>
           </DialogHeader>
-          <Separator className="my-4" />
+        
           <div className="mt-4">
             <Label
               htmlFor="balance"
@@ -826,7 +889,7 @@ const Billing = ({ role, userId }) => {
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <Separator className="my-4" />
+         
           <div className="flex justify-end">
             <Button onClick={handleUpdateBalance} disabled={!balanceAmount}>
               Save
@@ -835,70 +898,114 @@ const Billing = ({ role, userId }) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-gray-900">
-              Bill Details
-            </DialogTitle>
-          </DialogHeader>
-          <Separator className="my-4" />
-          {viewBill && (
-            <div className="mt-4">
-              <div className="text-sm font-medium text-gray-500 mb-2">
-                Date: {viewBill.date}
+      {/* View Bill Dialog */}
+      <Dialog open={isViewOpen}  onOpenChange={setIsViewOpen}>
+      <DialogContent className="sm:max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg -mt-2 text-center font-semibold text-gray-900">Bill Details</DialogTitle>
+        </DialogHeader>
+  
+
+        {viewBill && (
+          <div className="space-y-3">
+            {/* Bill Overview */}
+          
+            <div className="flex flex-col sm:flex-row justify-between">
+              <div className="text-sm text-gray-600 space-y-1">
+                <p><span className="font-medium">Date:</span> {viewBill.date}</p>
+              
+                <p><span className="font-medium">Payment Mode:</span> {viewBill.payment_mode || "Not Set"}</p>
+                <p><span className="font-medium">Balance:</span> ₹{viewBill.balance || 0}</p>
               </div>
-              <div className="text-sm font-medium text-gray-500 mb-2">
-                Payment Mode: {viewBill.payment_mode || "Not Set"}
-              </div>
-              <div className="text-sm font-medium text-gray-500 mb-2">
-                Balance: ₹{viewBill.balance || 0}
-              </div>
-              {viewBill.items.map((item, index) => (
-                <div key={index} className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-800">{item.description}</span>
-                  <span className="text-gray-600">
-                    Qty: {item.quantity}, Days: {item.numberOfDays}
-                  </span>
-                </div>
-              ))}
-              {viewBill.additional_bills &&
-                viewBill.additional_bills.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="font-bold text-gray-700">
-                      Additional Bills
-                    </h3>
-                    {viewBill.additional_bills.map((addBill, index) => (
-                      <div
-                        key={index}
-                        className="flex justify-between text-sm mb-2"
-                      >
-                        <span className="text-gray-800">{addBill.name}</span>
-                        <span className="text-gray-600">
-                          ₹{parseFloat(addBill.amount).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              <div className="text-right font-bold mt-4 text-lg text-blue-600">
-                Total: ₹{viewBill.total}
+              <div className="text-sm text-gray-600 sm:text-right">
+                <p><span className="font-medium">Invoice No:</span> {viewBill.invoice_number || ""}</p>
               </div>
             </div>
-          )}
-          <Separator className="my-4" />
-          {viewBill && (
-            <PrintUI
-              items={viewBill.items}
-              total={viewBill.total}
-              additionalBills={viewBill.additional_bills}
-              onBillGenerated={() => {}}
-              date={viewBill.date}
-              clientDetails={viewBill.client_details}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+            <ScrollArea className="h-72  ">
+            {/* Items Section */}
+            <div className="mb-3">
+  
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white">
+                  <thead>
+                    <tr>
+          
+                      <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Items</th>
+                      <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">QTY</th>
+                      <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">Days</th>
+                     
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewBill.items.map((item, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                     
+                        <td className="px-4 py-2 border text-sm text-gray-700">{item.description || 'N/A'}</td>
+                        <td className="px-4 py-2 border text-sm text-center text-gray-700">
+                          {item.quantity || '-'}
+                        </td>
+                        <td className="px-4 py-2 border text-sm text-center text-gray-700">
+                          {item.numberOfDays || '-'}
+                        </td>
+                   
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Additional Bills Section */}
+            {viewBill.additional_bills && viewBill.additional_bills.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Additional Bills</h3>
+                <div className="overflow-x-auto">
+                  <table  className="min-w-full bg-white">
+                    <thead >
+                      <tr>
+                        <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Name</th>
+                        <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewBill.additional_bills.map((addBill, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 border text-sm text-gray-700">{addBill.name}</td>
+                          <td className="px-4 py-2 border text-sm text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+</ScrollArea>
+            {/* Total Display */}
+            <div className="text-right font-semibold text-md text-black">
+              Total: ₹{parseFloat(viewBill.total).toFixed(2)}
+            </div>
+
+          
+
+            {/* Print Section */}
+            <div className="mt-4">
+              <PrintUI
+                items={viewBill.items}
+                total={viewBill.total}
+                additionalBills={viewBill.additional_bills}
+                onBillGenerated={() => {}}
+                date={viewBill.date}
+                clientDetails={viewBill.client_details}
+                invoiceNumber={viewBill.invoice_number}
+                createdAt={viewBill.created_at}
+              />
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+
+
     </div>
   );
 };

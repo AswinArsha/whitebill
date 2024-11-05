@@ -1,3 +1,4 @@
+// Client.jsx
 import React, { useState, useEffect } from 'react';
 import { Edit, Trash2, ChevronRight, ChevronLeft, Plus, Check, X, MoreVertical } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
@@ -5,8 +6,6 @@ import { supabase } from '../supabase';
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -22,7 +21,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -44,6 +42,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Utility function for conditional class names
+import { cn } from "@/lib/utils";
+
 const Client = ({ role, userId }) => {
   const [columns, setColumns] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +53,10 @@ const Client = ({ role, userId }) => {
   const [expandedColumns, setExpandedColumns] = useState([
     'Lead', 'Contacted', 'Proposal', 'Won', 'Lost'
   ]);
+
+  // New state for Delete Dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
 
   useEffect(() => {
     fetchClients();
@@ -87,56 +92,91 @@ const Client = ({ role, userId }) => {
   };
 
   const handleAddOrUpdateClient = async (client) => {
+    // Validate GSTIN (optional but recommended)
+    const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
+    if (client.gstin && !gstinPattern.test(client.gstin)) {
+      toast.error('Invalid GSTIN format. Please enter a valid 15-digit GSTIN.', {
+        style: {
+          background: '#f44336', // Red background
+          color: '#fff', // White text
+        },
+      });
+      return;
+    }
+  
+    // Ensure status is one of the allowed values
+    const validStatuses = ['lead', 'contacted', 'proposal', 'won', 'lost'];
+    const clientStatus = validStatuses.includes(client.status) ? client.status : 'lead';
+  
+    const clientData = {
+      client_name: client.client_name,
+      name: client.name,
+      status: clientStatus, // Set status to a valid value
+      company: client.company || null,
+      phone: client.phone || null,
+      location: client.location || null,
+      remarks: client.remarks || null,
+      gstin: client.gstin || null,
+      order: client.order || 0,
+    };
+  
     if (isEditMode) {
       const { error } = await supabase
         .from('clients')
-        .update(client)
+        .update(clientData)
         .eq('id', client.id);
-
+  
       if (error) {
-        toast.error('Failed to update client.');
+        toast.error('Failed to update client.', {
+          style: {
+            background: '#f44336', // Red background
+            color: '#fff', // White text
+          },
+        });
       } else {
         toast.success('Client updated successfully! ✏️');
       }
     } else {
       const { data, error } = await supabase
         .from('clients')
-        .insert([{ ...client, order: 0 }])
-        .select();  // Use .select() to ensure it returns the inserted row
-
+        .insert([clientData])
+        .select();
+  
       if (error) {
-        toast.error('Failed to add client.');
-      } else if (data && data.length > 0) { // Check if data is returned and has at least one item
-        toast.success('Client added successfully! 🎉');
-
-        // Insert at the start of the relevant column
-        const updatedColumns = columns.map(column => {
-          if (column.name.toLowerCase() === client.status) {
-            return {
-              ...column,
-              clients: [data[0], ...column.clients],
-            };
-          }
-          return column;
+        console.error('Error adding client:', error);
+        toast.error('Failed to add client.', {
+          style: {
+            background: '#f44336', // Red background
+            color: '#fff', // White text
+          },
         });
-
-        setColumns(updatedColumns);
+      } else if (data && data.length > 0) {
+        toast.success('Client added successfully! 🎉');
+        fetchClients();
       } else {
         toast.error('No client data returned after insertion.');
       }
     }
-
-    fetchClients(); // Refresh client list
+  
     setSelectedClient(null);
   };
-
+  
+  
+  
   const handleDeleteClient = async (id) => {
     const { error } = await supabase.from('clients').delete().eq('id', id);
 
     if (error) {
-      toast.error('Failed to delete client.');
+      toast.error('Failed to delete client.', {
+        style: {
+          background: '#f44336', // Red background
+          color: '#fff', // White text
+        },
+      });
     } else {
-      toast.success('Client deleted successfully! 🗑️');
+      toast.success('Client deleted successfully! 🗑️', {
+        
+      });
     }
 
     fetchClients();
@@ -164,7 +204,7 @@ const Client = ({ role, userId }) => {
       setColumns(newColumns);
   
       // Update order in the database
-      await updateClientOrder(sourceItems);
+      await updateClientOrder(sourceItems, sourceColumn.name);
     } else {
       // Moving to another column
       const destinationItems = Array.from(destinationColumn.clients);
@@ -183,30 +223,37 @@ const Client = ({ role, userId }) => {
   
       if (error) {
         console.error('Error updating client status:', error);
-        toast.error(`Failed to update status of client ${removed.client_name}.`);
+        toast.error(`Failed to update status of client ${removed.client_name}.`, {
+          style: {
+            background: '#f44336', // Red background
+            color: '#fff', // White text
+          },
+        });
       } else {
         // Show the client name in the success message
-        toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`);
+        toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`, {
+        
+        });
       }
   
       // Update order in the database for both columns
-      await updateClientOrder(sourceItems);
-      await updateClientOrder(destinationItems);
+      await updateClientOrder(sourceItems, sourceColumn.name);
+      await updateClientOrder(destinationItems, destinationColumn.name);
     }
   };
-  
 
-  const updateClientOrder = async (clients) => {
+  const updateClientOrder = async (clients, columnName) => {
     const updates = clients.map((client, index) => ({
       id: client.id,
       order: index,
+      status: columnName.toLowerCase(),
       name: client.name,
       company: client.company,
       phone: client.phone,
       location: client.location,
-      status: client.status,
       client_name: client.client_name,
       remarks: client.remarks,
+      gstin: client.gstin, // Include GSTIN in the update
     }));
 
     const { error } = await supabase
@@ -215,7 +262,12 @@ const Client = ({ role, userId }) => {
 
     if (error) {
       console.error('Error updating client order:', error);
-      toast.error('Failed to update client order.');
+      toast.error('Failed to update client order.', {
+        style: {
+          background: '#f44336', // Red background
+          color: '#fff', // White text
+        },
+      });
     }
   };
 
@@ -234,7 +286,8 @@ const Client = ({ role, userId }) => {
       (client.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (client.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (client.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.client_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+      (client.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.gstin || '').toLowerCase().includes(searchTerm.toLowerCase())
     ),
   }));
 
@@ -278,7 +331,7 @@ const Client = ({ role, userId }) => {
             className="flex-grow text-sm"
           />
           <Button
-            onClick={() => { setIsEditMode(false); setSelectedClient({ status: 'lead' }); }}
+            onClick={() => { setIsEditMode(false); setSelectedClient({ status: 'Lead', gstin: '' }); }}
             className="flex items-center space-x-1 text-sm px-3 py-2"
           >
             <Plus className="h-4 w-4" />
@@ -336,10 +389,13 @@ const Client = ({ role, userId }) => {
                               >
                                 <Card className="p-2 text-sm rounded-md shadow-none border border-gray-200">
                                   <CardHeader className="flex flex-row justify-between items-center p-0">
-                                  
                                     <div>
                                       <p className="font-semibold">{client.client_name}</p>
                                       <p className="text-xs text-gray-600">{client.name}</p>
+                                      {/* Optionally display GSTIN in the client card */}
+                                      {client.gstin && (
+                                        <p className="text-xs text-gray-600">GSTIN: {client.gstin}</p>
+                                      )}
                                     </div>
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
@@ -361,13 +417,15 @@ const Client = ({ role, userId }) => {
                                           <Edit className="h-4 w-4" />
                                           <span>Edit</span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="flex cursor-pointer items-center space-x-2 text-red-600" onClick={() => { /* Trigger delete dialog */ }}>
-                                          <Trash2 className="h-4 w-4" />
+                                        <DropdownMenuItem
+                                          onClick={() => { setClientToDelete(client); setIsDeleteDialogOpen(true); }}
+                                          className="flex items-center cursor-pointer space-x-2 text-red-600"
+                                        >
+                                          <Trash2 className="h-4 w-4 text-red-600" />
                                           <span>Delete</span>
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
-                                  
                                   </CardHeader>
                                 </Card>
                               </div>
@@ -463,6 +521,21 @@ const Client = ({ role, userId }) => {
                 />
               </div>
 
+              {/* GSTIN */}
+              <div>
+                <Label htmlFor="gstin">GSTIN</Label>
+                <Input
+                  id="gstin"
+                  placeholder="Enter GSTIN (15-digit)"
+                  value={selectedClient.gstin || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, gstin: e.target.value })}
+                  maxLength={15}
+                  pattern="^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$"
+                  title="GSTIN must be a 15-digit alphanumeric identifier."
+                  className="text-sm"
+                />
+              </div>
+
               {/* Remarks */}
               <div className="md:col-span-2">
                 <Label htmlFor="remarks">Remarks</Label>
@@ -498,27 +571,22 @@ const Client = ({ role, userId }) => {
       )}
 
       {/* Delete Confirmation AlertDialog */}
-      {selectedClient && !isEditMode && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" className="hidden"></Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Client</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete this client? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { handleDeleteClient(selectedClient.id); setSelectedClient(null); }}>
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Client</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this client? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { handleDeleteClient(clientToDelete.id); setIsDeleteDialogOpen(false); setClientToDelete(null); }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

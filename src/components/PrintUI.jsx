@@ -1,166 +1,104 @@
+// components/PrintUI.jsx
+
 import React, { useRef } from "react";
 import { Button } from "@/components/ui/button";
-import ReactToPrint from "react-to-print";
-import Logo from "@/assets/logo1.png";
-import { Printer } from 'lucide-react';
+import { Printer, ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import InvoicePrintComponent from "./InvoicePrintComponent"; // Standard invoice component
+import GSTInvoice from "./GSTInvoice"; // GST invoice component
+import { useReactToPrint } from 'react-to-print';
+import { format } from 'date-fns';
+import { toWords } from 'number-to-words';
 
+const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientDetails, invoiceNumber, createdAt }) => {
+  const standardRef = useRef();
+  const gstRef = useRef();
 
-const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientDetails }) => {
-  const componentRef = useRef();
+  // Convert total to words (for GST Invoice)
+  const totalNumber = parseFloat(total) || 0;
+  const integerPart = Math.floor(totalNumber);
+  const decimalPart = Math.round((totalNumber - integerPart) * 100);
+  let amountInWords = toWords(integerPart) + ' Rupees';
+  if (decimalPart > 0) {
+    amountInWords += ` and ${toWords(decimalPart)} Paise`;
+  }
 
-  const handlePrint = async () => {
-    await onBillGenerated();
-  };
+  const handlePrintStandard = useReactToPrint({
+    content: () => standardRef.current,
+    onBeforeGetContent: onBillGenerated,
+  });
+
+  const handlePrintGST = useReactToPrint({
+    content: () => gstRef.current,
+    onBeforeGetContent: onBillGenerated,
+  });
 
   return (
     <div>
-      <ReactToPrint
-        trigger={() => (
+      <Popover>
+        <PopoverTrigger asChild>
           <Button className="mt-4 w-full text-white flex items-center space-x-2 rounded-md py-2 transition-colors">
-        <Printer className="h-5 w-5 text-white" /> {/* Icon */}
-<span>Print Invoice</span>
+            <Printer className="h-5 w-5 text-white" />
+            <span>Print Invoice</span>
+            <ChevronDown className="h-4 w-4" />
           </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+          <div className="flex flex-col">
+            <Button variant="ghost" onClick={handlePrintStandard} className="w-full justify-start">
+              Standard Invoice
+            </Button>
+            <Button variant="ghost" onClick={handlePrintGST} className="w-full justify-start">
+              GST Invoice
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
 
-
-        )}
-        content={() => componentRef.current}
-        onBeforeGetContent={handlePrint}
-      />
-
+      {/* Hidden Components for Printing */}
       <div style={{ display: "none" }}>
         <InvoicePrintComponent
-          ref={componentRef}
+          ref={standardRef}
           items={items}
           total={total}
-          additionalBills={additionalBills} // Pass additional bills to the print component
+          additionalBills={additionalBills}
           date={date}
           clientDetails={clientDetails}
+          invoiceNumber={invoiceNumber}
+        />
+
+        <GSTInvoice
+          ref={gstRef}
+          invoiceData={{
+            invoiceNo: invoiceNumber || "N/A",
+            createdAt: createdAt || new Date().toISOString(), // Use createdAt from Supabase or fallback to current date
+            tradeName: "White Branding",
+            sellerAddress: "Thrissur, Kerala",
+            sellerGSTIN: "32BYOPT4425R1ZL", // Replace with actual GSTIN
+            partyName: clientDetails.split('\n')[0] || "Client Name",
+            partyAddress: clientDetails.split('\n').slice(1, 3).join(', ') || "Client Address",
+            partyGSTIN: clientDetails.match(/GSTIN:\s*(\S+)/)?.[1] || "N/A",
+            items: items.map(item => ({
+              particulars: item.description || 'N/A',
+              quantity: item.quantity || 0,
+              numberOfDays: item.numberOfDays || 0, // Ensure numberOfDays is passed
+              hsnSac: item.hsnSac || '', // Ensure this data is provided
+              rate: item.rate || "0",
+              amount: ((item.quantity || 0) * (item.rate || 0)).toFixed(2) || "0",
+            })),
+            totalAmount: parseFloat(total).toFixed(2) || "0",
+            roundOff: "0.00", // Adjust as needed
+            bankName: "Your Bank Name",
+            branch: "Your Branch Name",
+            ifscCode: "Your IFSC Code",
+            accountNo: "1234567890",
+            amountInWords: amountInWords, // Convert amount to words
+            companyName: "White Branding",
+          }}
         />
       </div>
     </div>
   );
 };
-
-class InvoicePrintComponent extends React.Component {
-  render() {
-    const { items, total, additionalBills, date, clientDetails } = this.props;
-
-    return (
-      <div ref={this.props.forwardedRef} style={{
-        padding: "40px",
-        fontFamily: "Inter, sans-serif",
-        maxWidth: "800px",
-        margin: "0 auto",
-        color: "#333",
-        backgroundColor: "#f9f9f9",
-        borderRadius: "8px",
-        minHeight: "100vh",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-      }}>
-        {/* Header Section */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "30px" }}>
-          <div style={{ display: "flex", alignItems: "center", marginLeft: "-35px" }}>
-            <img src={Logo} alt="Logo" style={{ width: '250px', height: '170px' }} />
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <h1 style={{ fontFamily: "RoxboroughCF", fontSize: "28pt", margin: "0", color: "#333" }}>INVOICE</h1>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", marginTop: "10px", color: "#555" }}>
-              Date: {date || "Date Not Specified"}
-            </p>
-          </div>
-        </div>
-
-        {/* Billing Information Section */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "40px" }}>
-          <div>
-            <h2 style={{ fontFamily: "Inter Medium", fontSize: "14pt", fontWeight: "bold", marginBottom: "10px", color: "#333" }}>BILLED TO:</h2>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555", margin: "5px 0", whiteSpace: "pre-wrap" }}>
-              {clientDetails || "Client details not provided"}
-            </p>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>White Branding</p>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>Thrissur, Kerala</p>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>8606602888</p>
-            <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>whitebranding0@gmail.com</p>
-          </div>
-        </div>
-
-        {/* Itemized Table Section */}
-        <div style={{ marginBottom: "30px", borderTop: "1px solid #bcb8b1", paddingTop: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #bcb8b1", paddingBottom: "10px", marginBottom: "10px" }}>
-            <span style={{ fontFamily: "Inter Medium", fontWeight: "bold", fontSize: "12pt", textAlign: "left", flex: 1, color: "#333" }}>Description</span>
-            <span style={{ fontFamily: "Inter Medium", fontWeight: "bold", fontSize: "12pt", textAlign: "center", flex: 0.5, color: "#333" }}>Quantity</span>
-            <span style={{ fontFamily: "Inter Medium", fontWeight: "bold", fontSize: "12pt", textAlign: "center", flex: 0.5, color: "#333" }}>Number of Days</span>
-          </div>
-          {items.map((item, index) => (
-            <div key={index} style={{ display: "flex", justifyContent: "space-between", margin: "10px 0", borderBottom: "1px solid #bcb8b1", paddingBottom: "10px" }}>
-              <span style={{ fontFamily: "Inter", fontSize: "12pt", flex: 1, color: "#555" }}>{item.description || "No description provided"}</span>
-              <span style={{ fontFamily: "Inter", fontSize: "12pt", textAlign: "center", flex: 0.5, color: "#555" }}>{item.quantity || "0"}</span>
-              <span style={{ fontFamily: "Inter", fontSize: "12pt", textAlign: "center", flex: 0.5, color: "#555" }}>{item.numberOfDays || "0"}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Additional Bills Section */}
-        {additionalBills.length > 0 && (
-          <div style={{  textAlign: "right",marginBottom: "30px" }}>
-            {additionalBills.map((bill, index) => (
-            <div key={index} style={{ marginBottom: "10px" }}>
-            <span style={{ textAlign: "right", fontFamily: "Inter Medium", fontSize: "13pt", color: "#333" }}>
-              {bill.name}
-            </span>
-            <span style={{  marginLeft: "20px",textAlign: "right", fontFamily: "Inter Medium", fontSize: "13pt", color: "#333" }}>
-              ₹{parseFloat(bill.amount).toFixed(2)}
-            </span>
-          </div>
-          
-            ))}
-          </div>
-        )}
-
-        {/* Total Section */}
-        <div style={{ textAlign: "right", marginBottom: "40px" }}>
-        <hr 
-  style={{
-    width: "20%", 
-    borderColor: "#bcb8b1", 
-    marginLeft: "auto" // This aligns the hr to the right
-  }} 
-/>
-
-          <div style={{  paddingTop: "10px" }}>
-            <span style={{
-              fontFamily: "Inter Medium",
-              fontSize: "14pt",
-              fontWeight: "bold",
-              color: "#333",
-              display: "inline-block",
-              width: "150px",
-              textAlign: "right"
-            }}>Total</span>
-            <span style={{
-              fontFamily: "Inter",
-              fontSize: "14pt",
-              fontWeight: "bold",
-              display: "inline-block",
-              marginLeft: "20px",
-              textAlign: "right",
-              color: "#333"
-            }}>₹{parseFloat(total).toFixed(2)}</span>
-          </div>
-        </div>
-
-        {/* Thank You Message */}
-        <div style={{ textAlign: "center", marginTop: "40px" }}>
-          <p style={{ fontFamily: "RoxboroughCF", fontSize: "14pt", fontStyle: "italic", color: "#333" }}>Thank you!</p>
-        </div>
-      </div>
-    );
-  }
-}
 
 export default PrintUI;
