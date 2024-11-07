@@ -58,6 +58,10 @@ const Client = ({ role, userId }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
+  // New states for Detail Dialog
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [clientDetails, setClientDetails] = useState(null);
+
   useEffect(() => {
     fetchClients();
   }, []);
@@ -160,8 +164,6 @@ const Client = ({ role, userId }) => {
   
     setSelectedClient(null);
   };
-  
-  
   
   const handleDeleteClient = async (id) => {
     const { error } = await supabase.from('clients').delete().eq('id', id);
@@ -386,6 +388,10 @@ const Client = ({ role, userId }) => {
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                                 className={`mb-2 ${snapshot.isDragging ? 'opacity-75' : ''}`}
+                                onClick={() => { 
+                                  setClientDetails(client); 
+                                  setIsDetailDialogOpen(true); 
+                                }}
                               >
                                 <Card className="p-2 text-sm rounded-md shadow-none border border-gray-200">
                                   <CardHeader className="flex flex-row justify-between items-center p-0">
@@ -405,20 +411,29 @@ const Client = ({ role, userId }) => {
                                           size="icon"
                                           className="p-1 rounded-full hover:bg-gray-200"
                                           aria-label="Actions"
+                                          onClick={(e) => e.stopPropagation()} // Prevent card's onClick
                                         >
                                           <MoreVertical className="h-4 w-4" />
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end" className="w-32">
                                         <DropdownMenuItem
-                                          onClick={() => { setIsEditMode(true); setSelectedClient(client); }}
+                                          onClick={(e) => { 
+                                            e.stopPropagation(); // Prevent card's onClick
+                                            setIsEditMode(true); 
+                                            setSelectedClient(client); 
+                                          }}
                                           className="flex items-center cursor-pointer space-x-2"
                                         >
                                           <Edit className="h-4 w-4" />
                                           <span>Edit</span>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
-                                          onClick={() => { setClientToDelete(client); setIsDeleteDialogOpen(true); }}
+                                          onClick={(e) => { 
+                                            e.stopPropagation(); // Prevent card's onClick
+                                            setClientToDelete(client); 
+                                            setIsDeleteDialogOpen(true); 
+                                          }}
                                           className="flex items-center cursor-pointer space-x-2 text-red-600"
                                         >
                                           <Trash2 className="h-4 w-4 text-red-600" />
@@ -587,6 +602,67 @@ const Client = ({ role, userId }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Client Detail Dialog */}
+      {clientDetails && (
+    <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+    <DialogContent className="max-w-lg bg-white rounded-lg shadow-lg p-6">
+      <DialogHeader className="mb-2">
+        <DialogTitle className="text-xl font-semibold text-gray-700">Client Details</DialogTitle>
+      </DialogHeader>
+  
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 mb-6">
+        <div>
+          <Label className="text-sm text-gray-500">Client Name</Label>
+          <p className="font-medium text-gray-800">{clientDetails.client_name || ''}</p>
+        </div>
+        <div>
+          <Label className="text-sm text-gray-500">Name</Label>
+          <p className="font-medium text-gray-800">{clientDetails.name || ''}</p>
+        </div>
+        <div>
+          <Label className="text-sm text-gray-500">Company</Label>
+          <p className="font-medium text-gray-800">{clientDetails.company || ''}</p>
+        </div>
+        <div>
+          <Label className="text-sm text-gray-500">Phone</Label>
+          <p className="font-medium text-gray-800">{clientDetails.phone || ''}</p>
+        </div>
+        <div>
+          <Label className="text-sm text-gray-500">Location</Label>
+          <p className="font-medium text-gray-800">{clientDetails.location || ''}</p>
+        </div>
+        <div>
+          <Label className="text-sm text-gray-500">GSTIN</Label>
+          <p className="font-medium text-gray-800">{clientDetails.gstin || ''}</p>
+        </div>
+        <div className="md:col-span-2">
+          <Label className="text-sm text-gray-500">Remarks</Label>
+          <p className="font-medium text-gray-800 whitespace-pre-line">{clientDetails.remarks || ''}</p>
+        </div>
+      </div>
+  
+      <div className="mt-4 flex justify-end space-x-2 border-t pt-4">
+        <Button onClick={() => setIsDetailDialogOpen(false)} className="">
+          <span>Close</span>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setIsDetailDialogOpen(false);
+            setIsEditMode(true);
+            setSelectedClient(clientDetails);
+          }}
+          className="flex items-center space-x-1 text-gray-700 border-gray-300 hover:bg-gray-100"
+        >
+          <Edit className="h-4 w-4" />
+          <span>Edit</span>
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+  
+      )}
     </div>
   );
 };
