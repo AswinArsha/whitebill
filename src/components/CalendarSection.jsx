@@ -137,24 +137,26 @@ const CalendarSection = ({ role, userId }) => {
     }
   };
 
-  // Fetch users with role 'user' (new function)
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, name")
-      .eq("role", "user")
-      .order("name");
-    if (error) {
-      console.error("Error fetching users:", error);
-    } else {
-      setUsers(
-        data.map((user) => ({
-          value: user.id,
-          label: user.name,
-        }))
-      );
-    }
-  };
+// Fetch users with show = true (updated function)
+const fetchUsers = async () => {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name")
+    .eq("show", true) // Filter by 'show' column
+    .order("name");
+
+  if (error) {
+    console.error("Error fetching users:", error);
+  } else {
+    setUsers(
+      data.map((user) => ({
+        value: user.id,
+        label: user.name,
+      }))
+    );
+  }
+};
+
 
   useEffect(() => {
     fetchClients();
