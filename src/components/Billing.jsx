@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "../supabase"; // Ensure this is correctly initialized for v2
 import { v4 as uuidv4 } from "uuid";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Check, Eye, Wallet, DollarSign } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Check, Eye, Wallet, DollarSign   } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { toWords } from 'number-to-words'; // Importing number-to-words library
 
 const Billing = ({ role, userId }) => {
@@ -65,7 +65,6 @@ const Billing = ({ role, userId }) => {
     { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
   ]);
   const [additionalBills, setAdditionalBills] = useState([]);
-  const [gstAmount, setGstAmount] = useState(""); // New state for GST amount
   const [outstandingBalance, setOutstandingBalance] = useState(0);
   const [isBalanceAdded, setIsBalanceAdded] = useState(false);
   const [billHistory, setBillHistory] = useState([]);
@@ -150,62 +149,51 @@ const Billing = ({ role, userId }) => {
     newItems.splice(index, 1);
     setItems(newItems);
   };
-
-// components/Billing.jsx (Excerpt)
-
-const handleBillGenerated = () => {
-  return new Promise(async (resolve, reject) => {
-    // Format the date range
-    const formattedDate = dateRange?.from && dateRange?.to 
-      ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
-      : dateRange?.from
-      ? format(new Date(dateRange.from), "dd/MM/yyyy")
-      : format(new Date(), "dd/MM/yyyy");
-
-    try {
-      // Convert total to number and handle NaN
-      const totalAmount = parseFloat(manualTotal) || 0;
-
-      // Convert GST amount to number and handle NaN
-      const gstAmountNumber = parseFloat(gstAmount) || 0;
-
-      // Convert amount to words (for GST Invoice)
-      const amountInWords = toWords(Math.floor(totalAmount + gstAmountNumber));
-
-      // Prepare the new bill object with gst_amount
-      const newBill = {
-        id: uuidv4(),
-        date: formattedDate,
-        total: totalAmount,
-        gst_amount: gstAmountNumber, // Add GST amount here
-        items: [...items],
-        client_details: clientDetails,
-        additional_bills: additionalBills,
-        payment_mode: "",
-        balance: 0,
-      };
-
-      // Insert the new bill into Supabase with .select()
-      const { data, error } = await supabase
-        .from('bills')
-        .insert([newBill])
-        .select(); // Ensure it returns the inserted row
-
-      if (error || !data || !data[0]) {
-        console.error('Error saving bill:', error);
-        throw new Error('Bill creation failed');
-      }
-
-      // Update state with new invoice number and creation date
-      setInvoiceNumber(data[0].invoice_number);
-      setCreatedAt(data[0].created_at);
-
-      // Update bill history
-      setBillHistory([data[0], ...billHistory]);
-
-      // Introduce a slight delay to ensure state is updated before printing
-      setTimeout(() => {
-        // Reset form fields after printing
+  const handleBillGenerated = () => {
+    return new Promise(async (resolve, reject) => {
+      // Format the date range for the bill
+      const formattedDate = dateRange?.from && dateRange?.to 
+        ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
+        : dateRange?.from
+        ? format(new Date(dateRange.from), "dd/MM/yyyy")
+        : format(new Date(), "dd/MM/yyyy");
+  
+      try {
+        // Calculate total amount and convert it to words
+        const totalAmount = parseFloat(manualTotal) || 0;
+        const amountInWords = toWords(Math.floor(totalAmount));
+  
+        // Prepare the new bill object without an invoice number, as Supabase will generate it
+        const newBill = {
+          id: uuidv4(),
+          date: formattedDate,
+          total: totalAmount,
+          items: [...items],
+          client_details: clientDetails,
+          additional_bills: additionalBills,
+          payment_mode: "",
+          balance: 0,
+        };
+  
+        // Insert the new bill into Supabase and retrieve the invoice details
+        const { data, error } = await supabase
+          .from('bills')
+          .insert([newBill])
+          .select(); // Ensures the response includes the new bill's invoice details
+  
+        if (error || !data || !data[0]) {
+          console.error('Error saving bill:', error);
+          throw new Error('Bill creation failed');
+        }
+  
+        // Set the invoice number and created date in the component state
+        setInvoiceNumber(data[0].invoice_number);
+        setCreatedAt(data[0].created_at);
+  
+        // Update bill history with the newly created bill
+        setBillHistory([data[0], ...billHistory]);
+  
+        // Reset form fields for a new bill entry
         setItems([
           { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
           { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
@@ -215,32 +203,31 @@ const handleBillGenerated = () => {
         setClientDetails("");
         setManualTotal(0);
         setAdditionalBills([]);
-        setGstAmount(""); // Reset GST amount
         setOutstandingBalance(0);
         setIsBalanceAdded(false);
+  
+        // Resolve with the invoice number and created date for printing
+        resolve({ invoice_number: data[0].invoice_number, created_at: data[0].created_at });
+      } catch (error) {
+        console.error('Error during bill generation:', error);
+        reject(error);
+      }
+    });
+  };
+  
 
-        resolve(newBill);
-      }, 100); // 100ms delay
-    } catch (error) {
-      console.error('Error during bill generation:', error);
-      reject(error);
+  const fetchBillHistory = async () => {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching bills:', error);
+    } else {
+      setBillHistory(data);
     }
-  });
-};
-
-const fetchBillHistory = async () => {
-  const { data, error } = await supabase
-    .from('bills')
-    .select('*') // Ensure gst_amount is selected
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching bills:', error);
-  } else {
-    setBillHistory(data);
-  }
-};
-
+  };
 
   const handleClientSelect = (client) => {
     setSelectedClient(client);
@@ -678,26 +665,6 @@ const fetchBillHistory = async () => {
               </Button>
             </div>
 
-            {/* GST Input Section */}
-            <div className="mb-6">
-             
-              <div className="flex space-x-4 mb-4">
-                <Input
-                  type="text"
-                  value="GST (6%)"
-                  readOnly
-                  className="flex-grow bg-gray-100 cursor-not-allowed"
-                />
-                <Input
-                  type="number"
-                  placeholder="Enter GST Amount"
-                  value={gstAmount}
-                  onChange={(e) => setGstAmount(e.target.value)}
-                  className="w-32"
-                />
-              </div>
-            </div>
-
             {/* Total */}
             <div className="mb-6">
               <Label
@@ -717,16 +684,15 @@ const fetchBillHistory = async () => {
 
             {/* PrintUI Component */}
             <PrintUI
-  items={items}
-  total={manualTotal}
-  additionalBills={additionalBills}
-  gstAmount={gstAmount}
-  onBillGenerated={handleBillGenerated}
-  date={formattedDate}
-  clientDetails={clientDetails}
-  invoiceNumber={invoiceNumber}
-  createdAt={createdAt}
-/>
+              items={items}
+              total={manualTotal}
+              additionalBills={additionalBills}
+              onBillGenerated={handleBillGenerated}
+              date={formattedDate}
+              clientDetails={clientDetails}
+              invoiceNumber={invoiceNumber}
+              createdAt={createdAt}
+            />
           </CardContent>
         </Card>
 
@@ -738,6 +704,7 @@ const fetchBillHistory = async () => {
           <CardContent className="px-6">
             {/* Search */}
             <div className="mb-4">
+             
               <Input
                 id="search"
                 type="text"
@@ -763,7 +730,7 @@ const fetchBillHistory = async () => {
                 {filteredBillHistory.map((bill) => (
                   <TableRow key={bill.id}>
                     <TableCell>
-                      {bill.created_at ? new Date(bill.created_at).toLocaleDateString() : bill.date}
+                    {bill.created_at ? new Date(bill.created_at).toLocaleDateString() : bill.date}
                     </TableCell>
                     <TableCell>
                       {bill.client_details
@@ -845,48 +812,57 @@ const fetchBillHistory = async () => {
 
       {/* Payment Mode Dialog */}
       <Dialog open={isPaymentModeOpen} onOpenChange={setIsPaymentModeOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-lg p-6 shadow-lg bg-white">
-          <DialogHeader className="text-center">
-            <DialogTitle className="text-lg font-semibold text-gray-800">Select Payment Mode</DialogTitle>
-          </DialogHeader>
+  <DialogContent className="sm:max-w-[400px] rounded-lg p-6 shadow-lg bg-white">
+    <DialogHeader className="text-center">
+      <DialogTitle className="text-lg font-semibold text-gray-800">Select Payment Mode</DialogTitle>
 
-          {/* Payment Options */}
-          <div className="mt-4 space-y-3">
-            <RadioGroup value={paymentMode} onValueChange={setPaymentMode} className="space-y-2">
-              <div 
-                className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Cash" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
-                onClick={() => setPaymentMode("Cash")}
-              >
-                <RadioGroupItem value="Cash" id="cash" className="hidden" />
-                <Label htmlFor="cash" className="text-gray-700 font-medium">Cash</Label>
-              </div>
-              
-              <div 
-                className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Swipe" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
-                onClick={() => setPaymentMode("Swipe")}
-              >
-                <RadioGroupItem value="Swipe" id="swipe" className="hidden" />
-                <Label htmlFor="swipe" className="text-gray-700 font-medium">Swipe</Label>
-              </div>
+    </DialogHeader>
 
-              <div 
-                className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "GPay" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
-                onClick={() => setPaymentMode("GPay")}
-              >
-                <RadioGroupItem value="GPay" id="gpay" className="hidden" />
-                <Label htmlFor="gpay" className="text-gray-700 font-medium">GPay</Label>
-              </div>
-            </RadioGroup>
-          </div>
+    
+    {/* Payment Options */}
+    <div className="mt-4 space-y-3">
+      <RadioGroup value={paymentMode} onValueChange={setPaymentMode} className="space-y-2">
+        
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Cash" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("Cash")}
+        >
+          <RadioGroupItem value="Cash" id="cash" className="hidden" />
+         
+          <Label htmlFor="cash" className="text-gray-700 font-medium">Cash</Label>
+        </div>
+        
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Swipe" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("Swipe")}
+        >
+          <RadioGroupItem value="Swipe" id="swipe" className="hidden" />
+      
+          <Label htmlFor="swipe" className="text-gray-700 font-medium">Swipe</Label>
+        </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={handleUpdatePaymentMode} disabled={!paymentMode} className="">
-              Save
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <div 
+          className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "GPay" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
+          onClick={() => setPaymentMode("GPay")}
+        >
+          <RadioGroupItem value="GPay" id="gpay" className="hidden" />
+        
+          <Label htmlFor="gpay" className="text-gray-700 font-medium">GPay</Label>
+        </div>
+        
+      </RadioGroup>
+    </div>
+
+   
+
+    {/* Save Button */}
+    <div className="flex justify-end">
+      <Button onClick={handleUpdatePaymentMode} disabled={!paymentMode} className="">
+        Save
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
 
       {/* Balance Update Dialog */}
       <Dialog open={isBalanceOpen} onOpenChange={setIsBalanceOpen}>
@@ -921,102 +897,113 @@ const fetchBillHistory = async () => {
       </Dialog>
 
       {/* View Bill Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg -mt-2 text-center font-semibold text-gray-900">Bill Details</DialogTitle>
-          </DialogHeader>
+      <Dialog open={isViewOpen}  onOpenChange={setIsViewOpen}>
+      <DialogContent className="sm:max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg -mt-2 text-center font-semibold text-gray-900">Bill Details</DialogTitle>
+        </DialogHeader>
+  
 
-          {viewBill && (
-            <div className="space-y-3">
-              {/* Bill Overview */}
-              <div className="flex flex-col sm:flex-row justify-between">
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><span className="font-medium">Date:</span> {viewBill.date}</p>
-                  <p><span className="font-medium">Payment Mode:</span> {viewBill.payment_mode || "Not Set"}</p>
-                  <p><span className="font-medium">Balance:</span> ₹{viewBill.balance || 0}</p>
-                </div>
-                <div className="text-sm text-gray-600 sm:text-right">
-                  <p><span className="font-medium">Invoice No:</span> {viewBill.invoice_number || ""}</p>
-                </div>
+        {viewBill && (
+          <div className="space-y-3">
+            {/* Bill Overview */}
+          
+            <div className="flex flex-col sm:flex-row justify-between">
+              <div className="text-sm text-gray-600 space-y-1">
+                <p><span className="font-medium">Date:</span> {viewBill.date}</p>
+              
+                <p><span className="font-medium">Payment Mode:</span> {viewBill.payment_mode || "Not Set"}</p>
+                <p><span className="font-medium">Balance:</span> ₹{viewBill.balance || 0}</p>
               </div>
-              <ScrollArea className="h-72">
-                {/* Items Section */}
-                <div className="mb-3">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white">
-                      <thead>
-                        <tr>
-                          <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Description</th>
-                          <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">QTY</th>
-                          <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">Days</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {viewBill.items.map((item, index) => (
-                          <tr key={index} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 border text-sm text-gray-700">{item.description || 'N/A'}</td>
-                            <td className="px-4 py-2 border text-sm text-center text-gray-700">
-                              {item.quantity || '-'}
-                            </td>
-                            <td className="px-4 py-2 border text-sm text-center text-gray-700">
-                              {item.numberOfDays || '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Additional Bills Section */}
-                {viewBill.additional_bills && viewBill.additional_bills.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-800">Additional Bills</h3>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full bg-white">
-                        <thead>
-                          <tr>
-                            <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Name</th>
-                            <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {viewBill.additional_bills.map((addBill, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 border text-sm text-gray-700">{addBill.name}</td>
-                              <td className="px-4 py-2 border text-sm text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </ScrollArea>
-              {/* Total Display */}
-              <div className="text-right font-semibold text-md text-black">
-                Total: ₹{parseFloat(viewBill.total).toFixed(2)}
-              </div>
-
-              {/* Print Section */}
-              <div className="mt-4">
-              <PrintUI
-            items={viewBill.items}
-            total={viewBill.total}
-            additionalBills={viewBill.additional_bills}
-            gstAmount={viewBill.gst_amount || 0}
-            onBillGenerated={() => Promise.resolve()} // Ensure it returns a resolved Promise
-            date={viewBill.date}
-            clientDetails={viewBill.client_details}
-            invoiceNumber={viewBill.invoice_number}
-            createdAt={viewBill.created_at}
-          />
+              <div className="text-sm text-gray-600 sm:text-right">
+                <p><span className="font-medium">Invoice No:</span> {viewBill.invoice_number || ""}</p>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <ScrollArea className="h-72  ">
+            {/* Items Section */}
+            <div className="mb-3">
+  
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white">
+                  <thead>
+                    <tr>
+          
+                      <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Items</th>
+                      <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">QTY</th>
+                      <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">Days</th>
+                     
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewBill.items.map((item, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                     
+                        <td className="px-4 py-2 border text-sm text-gray-700">{item.description || 'N/A'}</td>
+                        <td className="px-4 py-2 border text-sm text-center text-gray-700">
+                          {item.quantity || '-'}
+                        </td>
+                        <td className="px-4 py-2 border text-sm text-center text-gray-700">
+                          {item.numberOfDays || '-'}
+                        </td>
+                   
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Additional Bills Section */}
+            {viewBill.additional_bills && viewBill.additional_bills.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Additional Bills</h3>
+                <div className="overflow-x-auto">
+                  <table  className="min-w-full bg-white">
+                    <thead >
+                      <tr>
+                        <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Name</th>
+                        <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewBill.additional_bills.map((addBill, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 border text-sm text-gray-700">{addBill.name}</td>
+                          <td className="px-4 py-2 border text-sm text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+</ScrollArea>
+            {/* Total Display */}
+            <div className="text-right font-semibold text-md text-black">
+              Total: ₹{parseFloat(viewBill.total).toFixed(2)}
+            </div>
+
+          
+
+            {/* Print Section */}
+            <div className="mt-4">
+              <PrintUI
+                items={viewBill.items}
+                total={viewBill.total}
+                additionalBills={viewBill.additional_bills}
+                onBillGenerated={() => {}}
+                date={viewBill.date}
+                clientDetails={viewBill.client_details}
+                invoiceNumber={viewBill.invoice_number}
+                createdAt={viewBill.created_at}
+              />
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+
+
     </div>
   );
 };
