@@ -53,7 +53,7 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toWords } from 'number-to-words'; // Importing number-to-words library
 
 const Billing = ({ role, userId }) => {
@@ -65,6 +65,7 @@ const Billing = ({ role, userId }) => {
     { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
   ]);
   const [additionalBills, setAdditionalBills] = useState([]);
+  const [gstAmount, setGstAmount] = useState(""); // New state for GST amount
   const [outstandingBalance, setOutstandingBalance] = useState(0);
   const [isBalanceAdded, setIsBalanceAdded] = useState(false);
   const [billHistory, setBillHistory] = useState([]);
@@ -158,14 +159,14 @@ const Billing = ({ role, userId }) => {
         : dateRange?.from
         ? format(new Date(dateRange.from), "dd/MM/yyyy")
         : format(new Date(), "dd/MM/yyyy");
-
+  
       try {
         // Convert total to number and handle NaN
         const totalAmount = parseFloat(manualTotal) || 0;
-
+  
         // Convert amount to words (for GST Invoice)
         const amountInWords = toWords(Math.floor(totalAmount));
-
+  
         // Prepare the new bill object without invoice_number
         const newBill = {
           id: uuidv4(),
@@ -177,25 +178,25 @@ const Billing = ({ role, userId }) => {
           payment_mode: "",
           balance: 0,
         };
-
+  
         // Insert the new bill into Supabase with .select()
         const { data, error } = await supabase
           .from('bills')
           .insert([newBill])
           .select(); // Ensure it returns the inserted row
-
+  
         if (error || !data || !data[0]) {
           console.error('Error saving bill:', error);
           throw new Error('Bill creation failed');
         }
-
+  
         // Update state with new invoice number and creation date
         setInvoiceNumber(data[0].invoice_number);
         setCreatedAt(data[0].created_at);
-
+  
         // Update bill history
         setBillHistory([data[0], ...billHistory]);
-
+  
         // Reset form fields
         setItems([
           { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
@@ -206,9 +207,10 @@ const Billing = ({ role, userId }) => {
         setClientDetails("");
         setManualTotal(0);
         setAdditionalBills([]);
+        setGstAmount(""); // Reset GST amount
         setOutstandingBalance(0);
         setIsBalanceAdded(false);
-
+  
         resolve(newBill);
       } catch (error) {
         console.error('Error during bill generation:', error);
@@ -236,10 +238,10 @@ const Billing = ({ role, userId }) => {
     const gstinDetails = client.gstin ? `GSTIN: ${client.gstin}` : ""; // Check for GSTIN
     setClientDetails(`${details}${gstinDetails ? `\n${gstinDetails}` : ""}`); // Include GSTIN if available
     setIsComboBoxOpen(false);
-
+  
     setAdditionalBills([]);
     setIsBalanceAdded(false);
-
+  
     fetchOutstandingBalance(client);
   };
 
@@ -666,6 +668,28 @@ const Billing = ({ role, userId }) => {
               </Button>
             </div>
 
+            {/* GST Input Section */}
+            <div className="mb-6">
+              <Label className="block text-sm font-medium text-gray-700 mb-2">
+                GST (6%)
+              </Label>
+              <div className="flex space-x-4 mb-4">
+                <Input
+                  type="text"
+                  value="GST (6%)"
+                  readOnly
+                  className="flex-grow bg-gray-100 cursor-not-allowed"
+                />
+                <Input
+                  type="number"
+                  placeholder="Enter GST Amount"
+                  value={gstAmount}
+                  onChange={(e) => setGstAmount(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+            </div>
+
             {/* Total */}
             <div className="mb-6">
               <Label
@@ -685,10 +709,10 @@ const Billing = ({ role, userId }) => {
 
             {/* PrintUI Component */}
             <PrintUI
-            
               items={items}
               total={manualTotal}
               additionalBills={additionalBills}
+              gstAmount={gstAmount} // Pass GST amount to PrintUI
               onBillGenerated={handleBillGenerated}
               date={formattedDate}
               clientDetails={clientDetails}
@@ -706,12 +730,6 @@ const Billing = ({ role, userId }) => {
           <CardContent className="px-6">
             {/* Search */}
             <div className="mb-4">
-              <Label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Search Bill History
-              </Label>
               <Input
                 id="search"
                 type="text"
@@ -827,13 +845,11 @@ const Billing = ({ role, userId }) => {
           {/* Payment Options */}
           <div className="mt-4 space-y-3">
             <RadioGroup value={paymentMode} onValueChange={setPaymentMode} className="space-y-2">
-              
               <div 
                 className={`flex items-center space-x-4 p-4 rounded-lg border ${paymentMode === "Cash" ? "border-green-500 bg-green-50" : "border-gray-200"} hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer`} 
                 onClick={() => setPaymentMode("Cash")}
               >
                 <RadioGroupItem value="Cash" id="cash" className="hidden" />
-               
                 <Label htmlFor="cash" className="text-gray-700 font-medium">Cash</Label>
               </div>
               
@@ -842,7 +858,6 @@ const Billing = ({ role, userId }) => {
                 onClick={() => setPaymentMode("Swipe")}
               >
                 <RadioGroupItem value="Swipe" id="swipe" className="hidden" />
-            
                 <Label htmlFor="swipe" className="text-gray-700 font-medium">Swipe</Label>
               </div>
 
@@ -851,10 +866,8 @@ const Billing = ({ role, userId }) => {
                 onClick={() => setPaymentMode("GPay")}
               >
                 <RadioGroupItem value="GPay" id="gpay" className="hidden" />
-              
                 <Label htmlFor="gpay" className="text-gray-700 font-medium">GPay</Label>
               </div>
-              
             </RadioGroup>
           </div>
 
@@ -926,7 +939,7 @@ const Billing = ({ role, userId }) => {
                     <table className="min-w-full bg-white">
                       <thead>
                         <tr>
-                          <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Items</th>
+                          <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Description</th>
                           <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">QTY</th>
                           <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">Days</th>
                         </tr>
@@ -957,14 +970,14 @@ const Billing = ({ role, userId }) => {
                         <thead>
                           <tr>
                             <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Name</th>
-                            <th className="px-4 py-2 bg-gray-50 border text-right text-sm font-medium text-gray-700">Amount</th>
+                            <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Amount</th>
                           </tr>
                         </thead>
                         <tbody>
                           {viewBill.additional_bills.map((addBill, index) => (
                             <tr key={index} className="hover:bg-gray-50">
                               <td className="px-4 py-2 border text-sm text-gray-700">{addBill.name}</td>
-                              <td className="px-4 py-2 border text-sm text-right text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
+                              <td className="px-4 py-2 border text-sm text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -984,6 +997,8 @@ const Billing = ({ role, userId }) => {
                   items={viewBill.items}
                   total={viewBill.total}
                   additionalBills={viewBill.additional_bills}
+                  gstAmount={gstAmount} // Ensure GST amount is passed if needed
+                  onBillGenerated={() => {}}
                   date={viewBill.date}
                   clientDetails={viewBill.client_details}
                   invoiceNumber={viewBill.invoice_number}

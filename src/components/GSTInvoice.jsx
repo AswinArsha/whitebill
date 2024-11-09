@@ -21,8 +21,12 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
     partyGSTIN = '',
     items = [],
     totalAmount = 0,
-    gstAmount = 0,
+    gstAmount = 0, // GST amount
     roundOff = '0.00',
+    bankName = '',
+    branch = '',
+    ifscCode = '',
+    accountNo = '',
     amountInWords = '',
     companyName = '',
   } = invoiceData;
@@ -90,26 +94,37 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
               </tr>
             );
           })}
-          {/* GST (6%) Row */}
-          <tr>
-            <td colSpan="5" className="border border-gray-300 p-2 text-right text-md font-semibold">GST (6%)</td>
-            <td className="border border-gray-300 p-2 text-md text-right">{gstAmount}</td>
-          </tr>
           {/* Round Off Row */}
           <tr>
             <td colSpan="5" className="border border-gray-300 p-2 text-right text-md font-semibold">Round Off</td>
             <td className="border border-gray-300 p-2 text-md text-right">{roundOff}</td>
           </tr>
+
+          {/* GST (6%) Row */}
+          <tr>
+            <td colSpan="5" className="border border-gray-300 p-2 text-right text-md font-semibold">GST (6%)</td>
+            <td className="border border-gray-300 p-2 text-md text-right">{gstAmount.toFixed(2)}</td>
+          </tr>
+
           {/* Total Row */}
           <tr>
             <td colSpan="5" className="border border-gray-300 p-2 text-md text-right font-semibold">Total</td>
-            <td className="border border-gray-300 p-2 font-semibold text-md text-right">{totalAmount}</td>
+            <td className="border border-gray-300 p-2 font-semibold text-md text-right">{(parseFloat(totalAmount) + parseFloat(gstAmount)).toFixed(2)}</td>
           </tr>
         </tbody>
       </table>
 
       {/* Amount in Words */}
       <p className="mb-6">Amount in words: {amountWords}</p>
+
+      {/* Bank Details */}
+      <div className="mb-6">
+        <h2 className="text-sm font-semibold mb-2">Company Bank Details</h2>
+        <p className='text-sm'>Bank Name: {bankName}</p>
+        <p className='text-sm'>Account No: {accountNo}</p>
+        <p className='text-sm'>Branch: {branch}</p>
+        <p className='text-sm'>IFSC Code: {ifscCode}</p>
+      </div>
 
       {/* Footer */}
       <div className="text-center mt-16">
