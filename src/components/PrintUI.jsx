@@ -7,27 +7,30 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import InvoicePrintComponent from "./InvoicePrintComponent"; // Standard invoice component
 import GSTInvoice from "./GSTInvoice"; // GST invoice component
 import { useReactToPrint } from 'react-to-print';
-import { format } from 'date-fns';
 import { toWords } from 'number-to-words';
 
-const PrintUI = ({
-  items,
-  total,
-  additionalBills,
-  gstAmount, // Receive GST amount as a prop
-  onBillGenerated,
-  date,
-  clientDetails,
-  invoiceNumber,
-  createdAt
+const PrintUI = ({ 
+  items, 
+  total, 
+  additionalBills, 
+  gstAmount, 
+  onBillGenerated, 
+  date, 
+  clientDetails, 
+  invoiceNumber, 
+  createdAt 
 }) => {
   const standardRef = useRef();
   const gstRef = useRef();
 
-  // Convert total to words (for GST Invoice)
+  // Calculate total with GST
   const totalNumber = parseFloat(total) || 0;
-  const integerPart = Math.floor(totalNumber);
-  const decimalPart = Math.round((totalNumber - integerPart) * 100);
+  const gstNumber = parseFloat(gstAmount) || 0;
+  const totalWithGST = totalNumber + gstNumber;
+
+  // Convert totalWithGST to words
+  const integerPart = Math.floor(totalWithGST);
+  const decimalPart = Math.round((totalWithGST - integerPart) * 100);
   let amountInWords = toWords(integerPart) + ' Rupees';
   if (decimalPart > 0) {
     amountInWords += ` and ${toWords(decimalPart)} Paise`;
@@ -55,17 +58,17 @@ const PrintUI = ({
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0">
           <div className="flex flex-col">
-            <Button
-              variant="ghost"
-              onClick={handlePrintStandard}
-              className="w-full justify-start hover:bg-gray-100"
+            <Button 
+              variant="ghost" 
+              onClick={handlePrintStandard} 
+              className="w-full justify-start"
             >
               Standard Invoice
             </Button>
-            <Button
-              variant="ghost"
-              onClick={handlePrintGST}
-              className="w-full justify-start hover:bg-gray-100"
+            <Button 
+              variant="ghost" 
+              onClick={handlePrintGST} 
+              className="w-full justify-start"
             >
               GST Invoice
             </Button>
@@ -91,7 +94,7 @@ const PrintUI = ({
           ref={gstRef}
           invoiceData={{
             invoiceNo: invoiceNumber || "N/A",
-            createdAt: createdAt || new Date().toISOString(), // Use createdAt from Supabase or fallback to current date
+            createdAt: createdAt || new Date().toISOString(),
             tradeName: "White Branding",
             sellerAddress: "Thrissur, Kerala",
             sellerGSTIN: "32BYOPT4425R1ZL", // Replace with actual GSTIN
@@ -101,13 +104,13 @@ const PrintUI = ({
             items: items.map(item => ({
               particulars: item.description || 'N/A',
               quantity: item.quantity || 0,
-              numberOfDays: item.numberOfDays || 0, // Ensure numberOfDays is passed
-              hsnSac: item.hsnSac || '', // Ensure this data is provided
+              numberOfDays: item.numberOfDays || 0,
+              hsnSac: item.hsnSac || '',
               rate: item.rate || "0",
               amount: ((item.quantity || 0) * (item.rate || 0)).toFixed(2) || "0",
             })),
             totalAmount: parseFloat(total).toFixed(2) || "0",
-            gstAmount: parseFloat(gstAmount) || 0, // Pass GST amount
+            gstAmount: gstNumber.toFixed(2), // Pass GST amount
             roundOff: "0.00", // Adjust as needed
             bankName: "Your Bank Name",
             branch: "Your Branch Name",

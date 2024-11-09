@@ -1,8 +1,7 @@
 // components/GSTInvoice.jsx
 
 import React from 'react';
-import { toWords } from 'number-to-words';
-import { format, isValid } from 'date-fns';
+import { isValid, format } from 'date-fns';
 
 // Utility function to capitalize the first letter of each word
 const capitalizeWords = (text) => {
@@ -21,7 +20,7 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
     partyGSTIN = '',
     items = [],
     totalAmount = 0,
-    gstAmount = 0, // GST amount
+    gstAmount = 0, // GST amount, ensure it's treated as a number
     roundOff = '0.00',
     bankName = '',
     branch = '',
@@ -31,8 +30,11 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
     companyName = '',
   } = invoiceData;
 
-  // Convert totalAmount to words and capitalize each word
-  const amountWords = capitalizeWords(amountInWords || `${toWords(Math.floor(totalAmount))} Rupees`);
+  // Parse gstAmount and ensure it's a number
+  const parsedGstAmount = parseFloat(gstAmount) || 0;
+
+  // Use the passed amountInWords
+  const amountWords = capitalizeWords(amountInWords);
 
   // Safely format createdAt date
   const formattedCreatedAt = createdAt && isValid(new Date(createdAt))
@@ -94,22 +96,21 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
               </tr>
             );
           })}
-          {/* Round Off Row */}
           <tr>
             <td colSpan="5" className="border border-gray-300 p-2 text-right text-md font-semibold">Round Off</td>
             <td className="border border-gray-300 p-2 text-md text-right">{roundOff}</td>
           </tr>
 
-          {/* GST (6%) Row */}
+          {/* GST Row */}
           <tr>
             <td colSpan="5" className="border border-gray-300 p-2 text-right text-md font-semibold">GST (6%)</td>
-            <td className="border border-gray-300 p-2 text-md text-right">{gstAmount.toFixed(2)}</td>
+            <td className="border border-gray-300 p-2 text-md text-right">{parsedGstAmount.toFixed(2)}</td>
           </tr>
 
           {/* Total Row */}
           <tr>
             <td colSpan="5" className="border border-gray-300 p-2 text-md text-right font-semibold">Total</td>
-            <td className="border border-gray-300 p-2 font-semibold text-md text-right">{(parseFloat(totalAmount) + parseFloat(gstAmount)).toFixed(2)}</td>
+            <td className="border border-gray-300 p-2 font-semibold text-md text-right">{(parseFloat(totalAmount) + parsedGstAmount).toFixed(2)}</td>
           </tr>
         </tbody>
       </table>
@@ -118,13 +119,13 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
       <p className="mb-6">Amount in words: {amountWords}</p>
 
       {/* Bank Details */}
-      <div className="mb-6">
+      {/* <div className="mb-6">
         <h2 className="text-sm font-semibold mb-2">Company Bank Details</h2>
         <p className='text-sm'>Bank Name: {bankName}</p>
         <p className='text-sm'>Account No: {accountNo}</p>
         <p className='text-sm'>Branch: {branch}</p>
         <p className='text-sm'>IFSC Code: {ifscCode}</p>
-      </div>
+      </div> */}
 
       {/* Footer */}
       <div className="text-center mt-16">
