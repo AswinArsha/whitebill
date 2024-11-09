@@ -36,14 +36,19 @@ const PrintUI = ({
     amountInWords += ` and ${toWords(decimalPart)} Paise`;
   }
 
+  // Handle optional onBillGenerated
+  const handleBeforeGetContent = onBillGenerated 
+    ? () => onBillGenerated()
+    : () => Promise.resolve();
+
   const handlePrintStandard = useReactToPrint({
     content: () => standardRef.current,
-    onBeforeGetContent: onBillGenerated,
+    onBeforeGetContent: handleBeforeGetContent,
   });
 
   const handlePrintGST = useReactToPrint({
     content: () => gstRef.current,
-    onBeforeGetContent: onBillGenerated,
+    onBeforeGetContent: handleBeforeGetContent,
   });
 
   return (

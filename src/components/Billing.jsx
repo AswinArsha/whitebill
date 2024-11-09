@@ -151,53 +151,61 @@ const Billing = ({ role, userId }) => {
     setItems(newItems);
   };
 
-  const handleBillGenerated = () => {
-    return new Promise(async (resolve, reject) => {
-      // Format the date range
-      const formattedDate = dateRange?.from && dateRange?.to 
-        ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
-        : dateRange?.from
-        ? format(new Date(dateRange.from), "dd/MM/yyyy")
-        : format(new Date(), "dd/MM/yyyy");
-  
-      try {
-        // Convert total to number and handle NaN
-        const totalAmount = parseFloat(manualTotal) || 0;
-  
-        // Convert amount to words (for GST Invoice)
-        const amountInWords = toWords(Math.floor(totalAmount));
-  
-        // Prepare the new bill object without invoice_number
-        const newBill = {
-          id: uuidv4(),
-          date: formattedDate,
-          total: totalAmount,
-          items: [...items],
-          client_details: clientDetails,
-          additional_bills: additionalBills,
-          payment_mode: "",
-          balance: 0,
-        };
-  
-        // Insert the new bill into Supabase with .select()
-        const { data, error } = await supabase
-          .from('bills')
-          .insert([newBill])
-          .select(); // Ensure it returns the inserted row
-  
-        if (error || !data || !data[0]) {
-          console.error('Error saving bill:', error);
-          throw new Error('Bill creation failed');
-        }
-  
-        // Update state with new invoice number and creation date
-        setInvoiceNumber(data[0].invoice_number);
-        setCreatedAt(data[0].created_at);
-  
-        // Update bill history
-        setBillHistory([data[0], ...billHistory]);
-  
-        // Reset form fields
+// components/Billing.jsx (Excerpt)
+
+const handleBillGenerated = () => {
+  return new Promise(async (resolve, reject) => {
+    // Format the date range
+    const formattedDate = dateRange?.from && dateRange?.to 
+      ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
+      : dateRange?.from
+      ? format(new Date(dateRange.from), "dd/MM/yyyy")
+      : format(new Date(), "dd/MM/yyyy");
+
+    try {
+      // Convert total to number and handle NaN
+      const totalAmount = parseFloat(manualTotal) || 0;
+
+      // Convert GST amount to number and handle NaN
+      const gstAmountNumber = parseFloat(gstAmount) || 0;
+
+      // Convert amount to words (for GST Invoice)
+      const amountInWords = toWords(Math.floor(totalAmount + gstAmountNumber));
+
+      // Prepare the new bill object with gst_amount
+      const newBill = {
+        id: uuidv4(),
+        date: formattedDate,
+        total: totalAmount,
+        gst_amount: gstAmountNumber, // Add GST amount here
+        items: [...items],
+        client_details: clientDetails,
+        additional_bills: additionalBills,
+        payment_mode: "",
+        balance: 0,
+      };
+
+      // Insert the new bill into Supabase with .select()
+      const { data, error } = await supabase
+        .from('bills')
+        .insert([newBill])
+        .select(); // Ensure it returns the inserted row
+
+      if (error || !data || !data[0]) {
+        console.error('Error saving bill:', error);
+        throw new Error('Bill creation failed');
+      }
+
+      // Update state with new invoice number and creation date
+      setInvoiceNumber(data[0].invoice_number);
+      setCreatedAt(data[0].created_at);
+
+      // Update bill history
+      setBillHistory([data[0], ...billHistory]);
+
+      // Introduce a slight delay to ensure state is updated before printing
+      setTimeout(() => {
+        // Reset form fields after printing
         setItems([
           { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
           { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
@@ -210,27 +218,29 @@ const Billing = ({ role, userId }) => {
         setGstAmount(""); // Reset GST amount
         setOutstandingBalance(0);
         setIsBalanceAdded(false);
-  
+
         resolve(newBill);
-      } catch (error) {
-        console.error('Error during bill generation:', error);
-        reject(error);
-      }
-    });
-  };
-
-  const fetchBillHistory = async () => {
-    const { data, error } = await supabase
-      .from('bills')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching bills:', error);
-    } else {
-      setBillHistory(data);
+      }, 100); // 100ms delay
+    } catch (error) {
+      console.error('Error during bill generation:', error);
+      reject(error);
     }
-  };
+  });
+};
+
+const fetchBillHistory = async () => {
+  const { data, error } = await supabase
+    .from('bills')
+    .select('*') // Ensure gst_amount is selected
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching bills:', error);
+  } else {
+    setBillHistory(data);
+  }
+};
+
 
   const handleClientSelect = (client) => {
     setSelectedClient(client);
@@ -670,9 +680,7 @@ const Billing = ({ role, userId }) => {
 
             {/* GST Input Section */}
             <div className="mb-6">
-              <Label className="block text-sm font-medium text-gray-700 mb-2">
-                GST (6%)
-              </Label>
+             
               <div className="flex space-x-4 mb-4">
                 <Input
                   type="text"
@@ -709,16 +717,16 @@ const Billing = ({ role, userId }) => {
 
             {/* PrintUI Component */}
             <PrintUI
-              items={items}
-              total={manualTotal}
-              additionalBills={additionalBills}
-              gstAmount={gstAmount} // Pass GST amount to PrintUI
-              onBillGenerated={handleBillGenerated}
-              date={formattedDate}
-              clientDetails={clientDetails}
-              invoiceNumber={invoiceNumber}
-              createdAt={createdAt}
-            />
+  items={items}
+  total={manualTotal}
+  additionalBills={additionalBills}
+  gstAmount={gstAmount}
+  onBillGenerated={handleBillGenerated}
+  date={formattedDate}
+  clientDetails={clientDetails}
+  invoiceNumber={invoiceNumber}
+  createdAt={createdAt}
+/>
           </CardContent>
         </Card>
 
@@ -993,17 +1001,17 @@ const Billing = ({ role, userId }) => {
 
               {/* Print Section */}
               <div className="mt-4">
-                <PrintUI
-                  items={viewBill.items}
-                  total={viewBill.total}
-                  additionalBills={viewBill.additional_bills}
-                  gstAmount={gstAmount} // Ensure GST amount is passed if needed
-                  onBillGenerated={() => {}}
-                  date={viewBill.date}
-                  clientDetails={viewBill.client_details}
-                  invoiceNumber={viewBill.invoice_number}
-                  createdAt={viewBill.created_at}
-                />
+              <PrintUI
+            items={viewBill.items}
+            total={viewBill.total}
+            additionalBills={viewBill.additional_bills}
+            gstAmount={viewBill.gst_amount || 0}
+            onBillGenerated={() => Promise.resolve()} // Ensure it returns a resolved Promise
+            date={viewBill.date}
+            clientDetails={viewBill.client_details}
+            invoiceNumber={viewBill.invoice_number}
+            createdAt={viewBill.created_at}
+          />
               </div>
             </div>
           )}
