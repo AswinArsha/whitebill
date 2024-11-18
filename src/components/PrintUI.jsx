@@ -30,10 +30,12 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
   const handlePrintStandard = useReactToPrint({
     content: () => standardRef.current,
     onBeforeGetContent: async () => {
-      const generatedBill = await onBillGenerated();
-      if (generatedBill.invoice_number) {
-        setFinalInvoiceNumber(generatedBill.invoice_number);
-        setFinalCreatedAt(generatedBill.created_at);
+      if (onBillGenerated) {
+        const generatedBill = await onBillGenerated();
+        if (generatedBill && generatedBill.invoice_number) {
+          setFinalInvoiceNumber(generatedBill.invoice_number);
+          setFinalCreatedAt(generatedBill.created_at);
+        }
       }
     },
   });
@@ -41,10 +43,12 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
   const handlePrintGST = useReactToPrint({
     content: () => gstRef.current,
     onBeforeGetContent: async () => {
-      const generatedBill = await onBillGenerated();
-      if (generatedBill.invoice_number) {
-        setFinalInvoiceNumber(generatedBill.invoice_number);
-        setFinalCreatedAt(generatedBill.created_at);
+      if (onBillGenerated) {
+        const generatedBill = await onBillGenerated();
+        if (generatedBill && generatedBill.invoice_number) {
+          setFinalInvoiceNumber(generatedBill.invoice_number);
+          setFinalCreatedAt(generatedBill.created_at);
+        }
       }
     },
   });
@@ -95,7 +99,7 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
             sellerGSTIN: "32BYOPT4425R1ZL",
             partyName: clientDetails.split('\n')[0] || "Client Name",
             partyAddress: clientDetails.split('\n').slice(1, 3).join(', ') || "Client Address",
-            partyGSTIN: clientDetails.match(/GSTIN:\s*(\S+)/)?.[1] || "N/A",
+            partyGSTIN: clientDetails.match(/GSTIN:\s*(\S+)/)?.[1] || "",
             items: items.map(item => ({
               particulars: item.description || 'N/A',
               quantity: item.quantity || 0,

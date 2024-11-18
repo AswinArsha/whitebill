@@ -1,0 +1,44 @@
+I want to you to create a prompt for a software based on the details I will give below:
+design and create a react , shadcn , crm software for an interior designing company name 'wabisabi', the features is want is first a crm section , in this we can add clients , this also contains columns I will provide the main stages and the sub stages below, main stages is used for drag and drop and sub stages for inside pipelines , like only if the sub stages is completed, the main stages the cards can be drag and drop:
+1. Lead
+
+2. Client Engagement
+Stages:
+Client Proposal
+Site Visit
+Client Meeting
+
+3. Design & Planning
+Stages:
+Concept Designing
+3D Designing/Project Presentation
+BOQ/Detailed Estimation
+
+4. Work Preparation
+Stages:
+Work Preparation Start
+Site Measurement Rechecking
+2D Drawing with Cutting List
+
+5. Material and Site Work
+Stages:
+Gypsum Work Start
+Gypsum Work End
+Material Purchase/Selection
+Work Preparation End
+Scheduled Work Start
+Scheduled Work End
+
+6. Execution Phase
+Stages:
+On-Site Work Start
+On-Site Work End
+Factory Work Start
+Factory Work End
+Site Execution Start
+Site Execution End
+
+6. Completion
+
+, when a client is created using a add client dialog box, it will first appear in the lead main column, then user can drag and drop this client card.one the card is placed on the Design & Planning main column and approve button appears, which create a ledger in for that client. this is the crm section.
+second is client ledger section, in which we can see a client table, when a client is selected it goes to that selected client, which contains the details of that client, like client details, approved date, the amount client allocated like for example 10,000 , then below contain , in the client ledger , first material purchase, which is list of materials , in which we can search and add new materials, we can select multiple materials , next is deistributer section , where the user want the materila from , like a list where we can search , add and select  a distributor.after the material and distributor is selected and amount input shows which prompts the user to enter the amount for these cost , based on the amount entered the fro example if enetered amount is 3000  , it's minused from the client allocated amount for example , 10000-3000 , then the 7000 ,shows , these details will show in the a table below , like material , distributor and amount , date in table .next is the labour section ,i which i can assign labours to this site , the user can either assign an individual labour or and group of laboures to this site.we can also set role for this labroures , like main or helpers.we can also set charges for theses workers , based on the amount enterd the total amount allocated by client is also decreased.we can also these in the ledger when and where the amount is distributed to.now below the labour section , we can see a analytics section , which shows a pie charts of the money for that client basd on the category.this client ledger must be designed such a way that it will be easliy understandable to the user in one glance.i more money more than the client mentioned is spent , amount will be negative.provide mock date , this is for presnting a client this software for demo.

@@ -64,7 +64,7 @@ const GSTInvoice = React.forwardRef(({ invoiceData }, ref) => {
       <div className="mb-10">
         <p className="text-sm">Party: {partyName}</p>
         <p className="text-sm">Address: {partyAddress}</p>
-        <p className="text-sm">GSTIN: {partyGSTIN || "0"}</p>
+        <p className="text-sm">GSTIN: {partyGSTIN || ""}</p>
       </div>
 
       {/* Itemized Table Section */}
