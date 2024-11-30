@@ -8,6 +8,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,7 +31,10 @@ import {
   Clock,
   XCircle,
   MoreVertical,
-  Plus , Eye, Edit, Trash2 ,Save 
+  Plus, 
+  Eye, 
+  Trash2, 
+  Save 
 } from "lucide-react";
 import { supabase } from "../supabase";
 import { Input } from "@/components/ui/input";
@@ -45,14 +57,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DownloadPDFButton from "./DownloadPDFButton";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -73,7 +77,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import toast, { Toaster } from 'react-hot-toast';
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+
+// Import framer-motion components
+import { motion, AnimatePresence } from "framer-motion";
 
 const Attendance = ({ role, userId }) => {
   const [attendanceData, setAttendanceData] = useState([]);
@@ -90,10 +96,7 @@ const Attendance = ({ role, userId }) => {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState("user"); // Default role
-
-  // State for editing staff
   const [selectedUser, setSelectedUser] = useState(null); // To hold user data
-  const [isLoading, setIsLoading] = useState(false); // Loading state
 
   // Dialog states
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -101,8 +104,18 @@ const Attendance = ({ role, userId }) => {
     return format(now, 'MMMM yyyy');
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+
+  // Edit Card states
+  const [isEditCardOpen, setIsEditCardOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    department: "",
+    position: "",
+    username: "",
+    role: "user"
+  });
 
   const navigate = useNavigate();
 
@@ -291,9 +304,9 @@ const Attendance = ({ role, userId }) => {
           ])
           .select()
           .single();
-  
+      
         if (userError) throw userError;
-  
+      
         // Reset form fields and close dialog
         setNewName("");
         setNewDepartment("");
@@ -302,10 +315,10 @@ const Attendance = ({ role, userId }) => {
         setNewPassword("");
         setNewRole("user");
         setIsDialogOpen(false);
-  
+      
         // Refresh attendance data
         fetchAttendanceDataForMonth();
-  
+      
         // Show success toast
         toast.success("Staff added successfully! 🎉");
       } catch (error) {
@@ -316,84 +329,72 @@ const Attendance = ({ role, userId }) => {
       toast.error("Please fill in all fields.");
     }
   };
-  
 
-  const handleEditStaff = async () => {
-    if (
-      selectedUser?.name?.trim() &&
-      selectedUser?.department?.trim() &&
-      selectedUser?.position?.trim() &&
-      selectedUser?.username?.trim()
-    ) {
-      try {
-        // Prepare update data
-        const updateData = {
-          username: selectedUser.username.trim(),
-          role: selectedUser.role,
-          name: selectedUser.name.trim(),
-          department: selectedUser.department.trim(),
-          position: selectedUser.position.trim(),
-        };
-  
-        if (selectedUser.password?.trim()) {
-          updateData.password = selectedUser.password.trim(); // Consider hashing
-        }
-  
-        // Update users table
-        const { error: updateError } = await supabase
-          .from("users")
-          .update(updateData)
-          .eq("id", selectedUser.id);
-  
-        if (updateError) throw updateError;
-  
-        // Close edit dialog
-        setIsEditDialogOpen(false);
-        setSelectedUser(null);
-  
-        // Refresh attendance data
-        fetchAttendanceDataForMonth();
-  
-        // Show success toast
-        toast.success("Staff updated successfully! ✏️");
-      } catch (error) {
-        console.error("Error editing staff:", error);
-        toast.error("Failed to update staff. Please try again.");
-      }
-    } else {
-      toast.error("Please fill in all required fields.");
+  const handleEdit = async () => {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          name: editForm.name,
+          department: editForm.department,
+          position: editForm.position,
+          username: editForm.username,
+          role: editForm.role
+        })
+        .eq("id", editingUser.id);
+
+      if (error) throw error;
+
+      // Close edit card and refresh data
+      setIsEditCardOpen(false);
+      fetchAttendanceDataForMonth();
+      toast.success("User details updated successfully! ✏️");
+    } catch (error) {
+      console.error("Error updating user:", error);
+      toast.error("Failed to update user details.");
     }
   };
-  
+
+  const openEditCard = (user) => {
+    setEditingUser(user);
+    setEditForm({
+      name: user.name,
+      department: user.department,
+      position: user.position,
+      username: user.username,
+      role: user.role
+    });
+    setIsEditCardOpen(true);
+  };
 
   const handleDeleteStaff = async () => {
     if (selectedUser) {
       try {
         // Begin deletion process
-  
+
         // 1. Delete attendance records
         const { error: attendanceError } = await supabase
           .from("attendance")
           .delete()
           .eq("user_id", selectedUser.id);
-  
+
         if (attendanceError) throw attendanceError;
-  
+
         // 2. Delete user record
         const { error: userError } = await supabase
           .from("users")
           .delete()
           .eq("id", selectedUser.id);
-  
+
         if (userError) throw userError;
-  
+
         // Close alert dialog and reset selectedUser
         setIsAlertDialogOpen(false);
         setSelectedUser(null);
-  
+
         // Refresh attendance data
         fetchAttendanceDataForMonth();
-  
+
         // Show success toast
         toast.success("Staff deleted successfully! 🗑️");
       } catch (error) {
@@ -401,12 +402,6 @@ const Attendance = ({ role, userId }) => {
         toast.error("Failed to delete staff member. Please try again.");
       }
     }
-  };
-  
-
-  const openEditDialog = (user) => {
-    setSelectedUser(user); // Set the selected user's full details
-    setIsEditDialogOpen(true); // Open the edit dialog
   };
 
   const openDeleteDialog = (user) => {
@@ -432,18 +427,36 @@ const Attendance = ({ role, userId }) => {
     return options;
   };
 
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.pointerEvents = 'auto';
+    };
+  }, []);
+
+  // useEffect for resetting edit form when edit card closes
+  useEffect(() => {
+    if (!isEditCardOpen) {
+      setEditingUser(null);
+      setEditForm({
+        name: "",
+        department: "",
+        position: "",
+        username: "",
+        role: "user"
+      });
+    }
+  }, [isEditCardOpen]);
+
   return (
-    <div className="h-auto">
-        <Toaster position="bottom-center" reverseOrder={false} />
+    <div className="h-auto relative">
+      <Toaster position="bottom-center" reverseOrder={false} />
 
       {/* Header */}
       <div className="flex justify-between items-center ">
-
         <div className="flex items-center space-x-4">
           <div className="flex space-x-5 mb-4">
-         
             <AlertNotification />
-    
           </div>
         </div>
       </div>
@@ -496,7 +509,7 @@ const Attendance = ({ role, userId }) => {
       {/* Attendance Details Table */}
       <Card className="bg-gray-50">
         <CardHeader>
-          <div className="flex  justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4">
             <CardTitle>Attendance Details</CardTitle>
             <div className="flex items-center space-x-4">
               {/* Month Selector */}
@@ -524,13 +537,14 @@ const Attendance = ({ role, userId }) => {
                 />
               )}
 
+              {/* Add Staff Dialog */}
               {role === "admin" && (
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline"  className="flex items-center space-x-2">
-                    <Plus className="h-4 w-4" />
-    <span>Add Staff</span>
-                      </Button>
+                    <Button variant="outline" className="flex items-center space-x-2">
+                      <Plus className="h-4 w-4" />
+                      <span>Add Staff</span>
+                    </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
@@ -629,9 +643,9 @@ const Attendance = ({ role, userId }) => {
 
                       {/* Submit Button */}
                       <Button type="submit" className="w-full flex items-center space-x-2">
-                      <Plus className="h-4 w-4" />
-    <span>Add Staff</span>
-                        </Button>
+                        <Plus className="h-4 w-4" />
+                        <span>Add Staff</span>
+                      </Button>
                     </form>
                   </DialogContent>
                 </Dialog>
@@ -645,232 +659,240 @@ const Attendance = ({ role, userId }) => {
                 userId={userId}
               />
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table className="bg-white rounded-xl ">
-            <TableHeader  >
-              <TableRow className="hover:bg-white" >
-                <TableHead>Name</TableHead>
-                <TableHead>Check In</TableHead>
-                <TableHead>Check Out</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Days Present</TableHead>
-                <TableHead>Days Absent</TableHead>
-                <TableHead>Days Late</TableHead>
-                <TableHead>Avg Check-in</TableHead>
-                <TableHead>Actions</TableHead> {/* Always render "Actions" header */}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAttendanceData.map((user) => (
-                <TableRow key={user.id} className="cursor-pointer hover:bg-gray-100">
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.checkIn}</TableCell>
-                  <TableCell>{user.checkOut}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        user.status === "Present"
-                          ? "default"
-                          : user.status === "Late"
-                          ? "warning"
-                          : "destructive"
-                      }
-                    >
-                      {user.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">{user.daysPresent}</TableCell>
-                  <TableCell className="text-center">{user.daysAbsent}</TableCell>
-                  <TableCell className="text-center">{user.daysLate}</TableCell>
-                  <TableCell className="text-center">{user.averageCheckIn}</TableCell>
-                  <TableCell>
-                  <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <MoreVertical className="h-5 w-5 cursor-pointer" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {/* "View" option visible to all users */}
-        <DropdownMenuItem
-          className="cursor-pointer font-medium flex items-center space-x-2"
-          onClick={() => handleViewReport(user.id)}
-        >
-          <Eye className="h-4 w-4" />
-          <span>View</span>
-        </DropdownMenuItem>
-
-        {/* "Edit" and "Delete" options only visible to admins */}
-        {role === "admin" && (
-          <>
-            <DropdownMenuItem
-              className="cursor-pointer font-medium flex items-center space-x-2"
-              onClick={() => openEditDialog(user)}
-            >
-              <Edit className="h-4 w-4" />
-              <span>Edit</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="cursor-pointer font-medium flex items-center space-x-2 text-red-600"
-              onClick={() => openDeleteDialog(user)}
-            >
-              <Trash2 className="h-4 w-4 text-red-600" />
-              <span className="text-red-600">Delete</span>
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-                  </TableCell>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table className="bg-white rounded-xl ">
+              <TableHeader>
+                <TableRow className="hover:bg-white">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Check In</TableHead>
+                  <TableHead>Check Out</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Days Present</TableHead>
+                  <TableHead>Days Absent</TableHead>
+                  <TableHead>Days Late</TableHead>
+                  <TableHead>Avg Check-in</TableHead>
+                  <TableHead>Actions</TableHead> {/* Always render "Actions" header */}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {filteredAttendanceData.map((user) => (
+                  <TableRow key={user.id} className="cursor-pointer hover:bg-gray-100">
+                    <TableCell className="font-medium flex items-center space-x-2">
+                      {user.name}
+                      {user.role === "admin" && (
+                        <Badge variant="" className="ml-2">
+                          Admin
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{user.checkIn}</TableCell>
+                    <TableCell>{user.checkOut}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          user.status === "Present"
+                            ? "default"
+                            : user.status === "Late"
+                            ? "warning"
+                            : "destructive"
+                        }
+                      >
+                        {user.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{user.daysPresent}</TableCell>
+                    <TableCell className="text-center">{user.daysAbsent}</TableCell>
+                    <TableCell className="text-center">{user.daysLate}</TableCell>
+                    <TableCell className="text-center">{user.averageCheckIn}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <MoreVertical className="h-5 w-5 cursor-pointer" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            className="cursor-pointer font-medium flex items-center space-x-2"
+                            onClick={() => handleViewReport(user.id)}
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>View</span>
+                          </DropdownMenuItem>
 
-      {/* Edit Staff Dialog */}
-      {role === "admin" && selectedUser && (
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Staff</DialogTitle>
-              <DialogDescription>
-                Update the details of the staff member.
-              </DialogDescription>
-            </DialogHeader>
+                          {role === "admin" && (
+                            <>
+                              <DropdownMenuItem
+                                className="cursor-pointer font-medium flex items-center space-x-2"
+                                onClick={() => openEditCard(user)}
+                              >
+                                <Save className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer font-medium flex items-center space-x-2 text-red-600"
+                                onClick={() => openDeleteDialog(user)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                                <span className="text-red-600">Delete</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleEditStaff(); }}>
-              {/* Name */}
-              <div className="mb-4">
-                <Label htmlFor="edit-name" className="block mb-1">
-                  Name
-                </Label>
-                <Input
-                  id="edit-name"
-                  placeholder="Enter name"
-                  value={selectedUser.name || ""}
-                  onChange={(e) =>
-                    setSelectedUser({ ...selectedUser, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
+        {/* Editable Card for Editing Staff Details with Animation */}
+        <AnimatePresence>
+          {isEditCardOpen && editingUser && (
+            <motion.div
+              className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <motion.div
+                className="bg-white w-full sm:w-96 p-6 overflow-auto h-full relative"
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">Edit Staff Details</h2>
+                  <button
+                    onClick={() => setIsEditCardOpen(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    &#10005;
+                  </button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); handleEdit(); }}>
+                  {/* Name */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-name" className="block mb-1">
+                      Name
+                    </Label>
+                    <Input
+                      id="edit-name"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              {/* Department */}
-              <div className="mb-4">
-                <Label htmlFor="edit-department" className="block mb-1">
-                  Department
-                </Label>
-                <Input
-                  id="edit-department"
-                  placeholder="Enter department"
-                  value={selectedUser.department || ""}
-                  onChange={(e) =>
-                    setSelectedUser({ ...selectedUser, department: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                  {/* Department */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-department" className="block mb-1">
+                      Department
+                    </Label>
+                    <Input
+                      id="edit-department"
+                      value={editForm.department}
+                      onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              {/* Position */}
-              <div className="mb-4">
-                <Label htmlFor="edit-position" className="block mb-1">
-                  Position
-                </Label>
-                <Input
-                  id="edit-position"
-                  placeholder="Enter position"
-                  value={selectedUser.position || ""}
-                  onChange={(e) =>
-                    setSelectedUser({ ...selectedUser, position: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                  {/* Position */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-position" className="block mb-1">
+                      Position
+                    </Label>
+                    <Input
+                      id="edit-position"
+                      value={editForm.position}
+                      onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              {/* Username */}
-              <div className="mb-4">
-                <Label htmlFor="edit-username" className="block mb-1">
-                  Username
-                </Label>
-                <Input
-                  id="edit-username"
-                  placeholder="Enter username"
-                  value={selectedUser.username || ""}
-                  onChange={(e) =>
-                    setSelectedUser({ ...selectedUser, username: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                  {/* Username */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-username" className="block mb-1">
+                      Username
+                    </Label>
+                    <Input
+                      id="edit-username"
+                      value={editForm.username}
+                      onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              {/* Password */}
-              <div className="mb-4">
-                <Label htmlFor="edit-password" className="block mb-1">
-                  Password
-                </Label>
-                <Input
-                  id="edit-password"
-                  type="password"
-                  placeholder="Enter new password"
-                  value={selectedUser.password || ""}
-                  onChange={(e) =>
-                    setSelectedUser({ ...selectedUser, password: e.target.value })
-                  }
-                />
-                <p className="text-xs text-gray-500 mt-1">Leave blank to keep existing password.</p>
-              </div>
+                  {/* Role */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-role" className="block mb-1">
+                      Role
+                    </Label>
+                    <Select 
+                      value={editForm.role} 
+                      onValueChange={(value) => setEditForm({ ...editForm, role: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {/* Role Switch */}
-              <div className="flex items-center mb-4">
-                <Switch
-                  id="edit-role-switch"
-                  checked={selectedUser.role === "admin"}
-                  onCheckedChange={(checked) =>
-                    setSelectedUser({ ...selectedUser, role: checked ? "admin" : "user" })
-                  }
-                />
-                <Label htmlFor="edit-role-switch" className="ml-2">
-                  {selectedUser.role === "admin" ? "Admin" : "User"}
-                </Label>
-              </div>
+                  {/* Submit Button */}
+                  <Button type="submit" className="w-full flex items-center space-x-2 mb-2">
+                    <Save className="h-4 w-4" />
+                    <span>Save Changes</span>
+                  </Button>
+                </form>
+                {/* Optional: Close Button */}
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsEditCardOpen(false)} 
+                  className="mt-2 w-full flex items-center justify-center"
+                >
+                  Close
+                </Button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              {/* Save Button */}
-              <Button className="w-full flex items-center justify-center space-x-2" type="submit">
-  <Save className="h-4 w-4" />
-  <span>Save</span>
-</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+        {/* Delete Staff Alert Dialog */}
+        {role === "admin" && selectedUser && (
+          <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Are you sure you want to delete this staff member?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone and will permanently delete the
+                  staff member, their user account, and all related attendance records.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-red-500 flex items-center space-x-2 hover:bg-red-400" 
+                  onClick={handleDeleteStaff}
+                >
+                  <Trash2 className="h-4 w-4 text-white" />
+                  <span className="text-white">Delete</span>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    );
+  };
 
-      {/* Delete Staff Alert Dialog */}
-      {role === "admin" && selectedUser && (
-        <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Are you sure you want to delete this staff member?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone and will permanently delete the
-                staff member, their user account, and all related attendance records.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-red-500 flex items-center space-x-2 hover:bg-red-400" onClick={handleDeleteStaff}>
-              <Trash2 className="h-4 w-4 text-white" />
-              <span className="text-white">Delete</span>
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-    </div>
-  );
-};
-
-export default Attendance;
+  export default Attendance;
