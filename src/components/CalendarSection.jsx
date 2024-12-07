@@ -65,7 +65,7 @@ const CATEGORIES = [
   { value: "task", label: "Task" }, 
 ];
 
-const FILTER_CATEGORIES = [{ value: "all", label: "Filter by Category" }, ...CATEGORIES];
+const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGORIES];
 
 const getCategoryColor = (category, isDone) => {
   if (isDone) return "#4caf50"; // Green for done events
@@ -109,12 +109,12 @@ const CalendarSection = ({ role, userId }) => {
   const [mode, setMode] = useState(null); // 'add', 'edit', 'view'
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterClientName, setFilterClientName] = useState("");
+  const [filterClientName, setFilterClientName] = useState(""); // Initialize as empty string
   const [isPrinting, setIsPrinting] = useState(false);
   const [errors, setErrors] = useState({ title: "", category: "" });
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]); // New state for users
-  const [filterClientPopoverOpen, setFilterClientPopoverOpen] = useState(false); // State for filter popover
+  // Removed filterClientPopoverOpen as it's no longer needed
   const calendarRef = useRef(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showFilters, setShowFilters] = useState(false);
@@ -137,26 +137,25 @@ const CalendarSection = ({ role, userId }) => {
     }
   };
 
-// Fetch users with show = true (updated function)
-const fetchUsers = async () => {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, name")
-    .eq("show", true) // Filter by 'show' column
-    .order("name");
+  // Fetch users with show = true (updated function)
+  const fetchUsers = async () => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, name")
+      .eq("show", true) // Filter by 'show' column
+      .order("name");
 
-  if (error) {
-    console.error("Error fetching users:", error);
-  } else {
-    setUsers(
-      data.map((user) => ({
-        value: user.id,
-        label: user.name,
-      }))
-    );
-  }
-};
-
+    if (error) {
+      console.error("Error fetching users:", error);
+    } else {
+      setUsers(
+        data.map((user) => ({
+          value: user.id,
+          label: user.name,
+        }))
+      );
+    }
+  };
 
   useEffect(() => {
     fetchClients();
@@ -182,7 +181,7 @@ const fetchUsers = async () => {
       query = query.eq("category", filterCategory);
     }
 
-    if (filterClientName) {
+    if (filterClientName && filterClientName !== "all") { // Updated condition
       query = query.eq("client_name", filterClientName);
     }
 
@@ -721,72 +720,28 @@ const fetchUsers = async () => {
             </SelectContent>
           </Select>
 
-          {/* Client Name Filter */}
-          <Popover
-            open={filterClientPopoverOpen}
-            onOpenChange={setFilterClientPopoverOpen}
+          {/* Client Name Filter - Replaced Popover with Select */}
+          <Select
+            value={filterClientName || "all"}
+            onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
           >
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={filterClientPopoverOpen}
-                className="w-full justify-between"
-                type="button"
-              >
-                {filterClientName || "Filter by Client"}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[460px] p-0 ">
-              <Command
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                <CommandInput
-                  placeholder="Search clients..."
-                  onChange={(e) => {
-                    // Optionally implement client-side search/filter
-                  }}
-                />
-                <CommandList>
-                  <CommandEmpty>No client found.</CommandEmpty>
-                  <CommandGroup>
-                    {clients.map((client) => (
-                      <CommandItem
-                        key={client.value}
-                        value={client.value}
-                        onSelect={(currentValue) => {
-                          setFilterClientName(
-                            currentValue === filterClientName
-                              ? ""
-                              : currentValue
-                          );
-                          setFilterClientPopoverOpen(false); // Close the popover after selection
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            filterClientName === client.value
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
-                        {client.label}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+            <SelectTrigger>
+              <SelectValue placeholder="All Clients" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem key="all" value="all">
+                All Clients
+              </SelectItem>
+              {clients.map((client) => (
+                <SelectItem key={client.value} value={client.value}>
+                  {client.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Assign To Filter (Optional: If you want to filter by assigned users) */}
-          {/* You can implement a similar Popover here if needed */}
+          {/* You can implement a similar Select here if needed */}
 
           {/* Download PDF Button */}
           {role === "admin" && (
@@ -882,9 +837,9 @@ const fetchUsers = async () => {
                       />
                     ) : (
                       <Select
-                        value={newEvent.clientName}
+                        value={newEvent.clientName || "all"}
                         onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, clientName: value })
+                          setNewEvent({ ...newEvent, clientName: value === "all" ? "" : value })
                         }
                         required
                         className="mt-1"
@@ -893,6 +848,9 @@ const fetchUsers = async () => {
                           <SelectValue placeholder="Select a client" />
                         </SelectTrigger>
                         <SelectContent className="relative z-[1050]">
+                          <SelectItem key="all" value="all">
+                            All Clients
+                          </SelectItem>
                           {clients.map((client) => (
                             <SelectItem
                               key={client.value}
@@ -954,53 +912,53 @@ const fetchUsers = async () => {
                     )}
                   </div>
                         {/* Assign To (Updated Section) */}
-             
-                    {/* Assign To */}
-                    <div>
-                      <Label
-                        htmlFor="assignedUser"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Assign To
-                      </Label>
-                      {mode === "view" ? (
-                        <Input
-                          id="assignedUser"
-                          value={
-                            users
-                              .filter(user => newEvent.assignedUserIds.includes(user.value))
-                              .map(user => user.label)
-                              .join(", ")
-                          }
-                          readOnly
-                          className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                        />
-                      ) : (
-                        <Select
-                          value={newEvent.assignedUserIds.length > 0 ? newEvent.assignedUserIds[0].toString() : ""}
-                          onValueChange={(value) =>
-                            setNewEvent({ ...newEvent, assignedUserIds: value ? [Number(value)] : [] })
-                          }
-                          className="mt-1"
+           
+                      {/* Assign To */}
+                      <div>
+                        <Label
+                          htmlFor="assignedUser"
+                          className="block text-sm font-medium text-gray-700"
                         >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a user" />
-                          </SelectTrigger>
-                          <SelectContent className="relative z-[1050]">
-                            {users.map((user) => (
-                              <SelectItem
-                                key={user.value}
-                                value={user.value.toString()}
-                              >
-                                {user.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
+                          Assign To
+                        </Label>
+                        {mode === "view" ? (
+                          <Input
+                            id="assignedUser"
+                            value={
+                              users
+                                .filter(user => newEvent.assignedUserIds.includes(user.value))
+                                .map(user => user.label)
+                                .join(", ")
+                            }
+                            readOnly
+                            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                          />
+                        ) : (
+                          <Select
+                            value={newEvent.assignedUserIds.length > 0 ? newEvent.assignedUserIds[0].toString() : ""}
+                            onValueChange={(value) =>
+                              setNewEvent({ ...newEvent, assignedUserIds: value ? [Number(value)] : [] })
+                            }
+                            className="mt-1"
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select a user" />
+                            </SelectTrigger>
+                            <SelectContent className="relative z-[1050]">
+                              {users.map((user) => (
+                                <SelectItem
+                                  key={user.value}
+                                  value={user.value.toString()}
+                                >
+                                  {user.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                  
                 
-              
                 </div>
                 {/* Remarks, Location, and Assign To */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1065,7 +1023,7 @@ const fetchUsers = async () => {
                   </div>
                 </div>
 
-          
+    
 
                 {/* Mark as Done */}
                 <MarkAsDone
