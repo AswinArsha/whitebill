@@ -944,7 +944,7 @@ const CalendarSection = ({ role, userId }) => {
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Select a user" />
                             </SelectTrigger>
-                            <SelectContent className="relative z-[1050]">
+                            <SelectContent className="max-h-60 relative z-[1050]">
                               {users.map((user) => (
                                 <SelectItem
                                   key={user.value}
