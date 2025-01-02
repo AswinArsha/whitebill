@@ -114,7 +114,8 @@ const Attendance = ({ role, userId }) => {
     department: "",
     position: "",
     username: "",
-    role: "user"
+    role: "user",
+    password: "", // Added password field
   });
 
   const navigate = useNavigate();
@@ -339,7 +340,8 @@ const Attendance = ({ role, userId }) => {
           department: editForm.department,
           position: editForm.position,
           username: editForm.username,
-          role: editForm.role
+          role: editForm.role,
+          password: editForm.password, // Include password in the update
         })
         .eq("id", editingUser.id);
 
@@ -362,7 +364,8 @@ const Attendance = ({ role, userId }) => {
       department: user.department,
       position: user.position,
       username: user.username,
-      role: user.role
+      role: user.role,
+      password: user.password || "", // Populate password field
     });
     setIsEditCardOpen(true);
   };
@@ -443,7 +446,8 @@ const Attendance = ({ role, userId }) => {
         department: "",
         position: "",
         username: "",
-        role: "user"
+        role: "user",
+        password: "", // Reset password field
       });
     }
   }, [isEditCardOpen]);
@@ -454,10 +458,8 @@ const Attendance = ({ role, userId }) => {
 
       {/* Header */}
       <div className="flex justify-between items-center ">
-        <div className="flex items-center space-x-4">
-          <div className="flex space-x-5 mb-4">
-            <AlertNotification />
-          </div>
+        <div className="flex space-x-5 mb-4">
+          <AlertNotification />
         </div>
       </div>
 
@@ -827,6 +829,21 @@ const Attendance = ({ role, userId }) => {
                     />
                   </div>
 
+                  {/* Password */}
+                  <div className="mb-4">
+                    <Label htmlFor="edit-password" className="block mb-1">
+                      Password
+                    </Label>
+                    <Input
+                      id="edit-password"
+                      type="password"
+                      placeholder="Enter new password"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                      required
+                    />
+                  </div>
+
                   {/* Role */}
                   <div className="mb-4">
                     <Label htmlFor="edit-role" className="block mb-1">
@@ -893,6 +910,7 @@ const Attendance = ({ role, userId }) => {
         )}
       </div>
     );
+
   };
 
-  export default Attendance;
+export default Attendance;
