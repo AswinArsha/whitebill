@@ -1,4 +1,5 @@
 // Attendance.jsx
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 
 import {
   Table,
@@ -81,6 +82,9 @@ import { Label } from "@/components/ui/label";
 // Import framer-motion components
 import { motion, AnimatePresence } from "framer-motion";
 
+// Import the AttendanceBadge component
+import AttendanceBadge from "./AttendanceBadge";
+
 const Attendance = ({ role, userId }) => {
   const [attendanceData, setAttendanceData] = useState([]);
   const [totalStaff, setTotalStaff] = useState(0);
@@ -121,7 +125,7 @@ const Attendance = ({ role, userId }) => {
   const navigate = useNavigate();
 
   const officeStartTime = "10:00";
-  const lateThreshold = "10:10";
+  const lateThreshold = "10:15";
 
   // Debugging: Log role and userId
   useEffect(() => {
@@ -134,6 +138,15 @@ const Attendance = ({ role, userId }) => {
     fetchAttendanceDataForMonth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, role, userId]);
+
+  // Helper Function to Format Time
+  const formatTime = (timeStr) => {
+    if (!timeStr) return "-";
+    const [hour, minute] = timeStr.split(":").map(Number);
+    const date = new Date();
+    date.setHours(hour, minute);
+    return format(date, "hh:mm a"); // 12-hour format with AM/PM
+  };
 
   const fetchAttendanceDataForMonth = async () => {
     // Defensive check to ensure userId is defined for regular users
@@ -173,7 +186,7 @@ const Attendance = ({ role, userId }) => {
       // Fetch attendance data based on role
       let attendanceQuery = supabase
         .from("attendance")
-        .select("user_id, date, time")
+        .select("user_id, date, check_in, check_out")
         .gte("date", format(firstDay, "yyyy-MM-dd"))
         .lte("date", format(lastRelevantDay, "yyyy-MM-dd"));
 
@@ -205,6 +218,7 @@ const Attendance = ({ role, userId }) => {
           status: "Absent",
           checkIn: "-",
           checkOut: "-",
+          averageCheckIn: "-", // Initialize averageCheckIn
         };
         return acc;
       }, {});
@@ -221,25 +235,40 @@ const Attendance = ({ role, userId }) => {
           );
 
           if (userDayAttendance.length > 0) {
-            const checkInTime = userDayAttendance[0].time;
-            const checkOutTime = userDayAttendance[userDayAttendance.length - 1].time;
-            const status = checkInTime <= lateThreshold ? "Present" : "Late";
+            const checkInTime = userDayAttendance[0].check_in;
+            const checkOutTime = userDayAttendance[userDayAttendance.length - 1].check_out;
 
-            userMap[user.id].daysAbsent -= 1;
-            userMap[user.id].daysPresent += 1;
-            if (status === "Late") {
-              userMap[user.id].daysLate += 1;
+            // Format times
+            const formattedCheckIn = formatTime(checkInTime);
+            const formattedCheckOut = formatTime(checkOutTime);
+
+            // Determine status based on check-in time
+            let status = "Absent";
+            if (checkInTime) {
+              status = checkInTime <= lateThreshold ? "Present" : "Late";
             }
-            // Convert time to decimal hours
-            const [checkInHour, checkInMinute] = checkInTime.split(":").map(Number);
-            const checkInDecimal = checkInHour + checkInMinute / 60;
-            userMap[user.id].totalCheckInTime += checkInDecimal;
-            userMap[user.id].checkInCount += 1;
 
-            if (isSameDay(day, today) && user.id === userId) {
+            if (status !== "Absent") {
+              userMap[user.id].daysAbsent -= 1;
+              userMap[user.id].daysPresent += 1;
+              if (status === "Late") {
+                userMap[user.id].daysLate += 1;
+              }
+
+              // Convert time to decimal hours for average calculation
+              if (checkInTime) {
+                const [checkInHour, checkInMinute] = checkInTime.split(":").map(Number);
+                const checkInDecimal = checkInHour + checkInMinute / 60;
+                userMap[user.id].totalCheckInTime += checkInDecimal;
+                userMap[user.id].checkInCount += 1;
+              }
+            }
+
+            // Set today's check-in and check-out for admins or the current user
+            if (isSameDay(day, today) && (role === "admin" || user.id === userId)) {
               userMap[user.id].status = status;
-              userMap[user.id].checkIn = checkInTime;
-              userMap[user.id].checkOut = checkOutTime;
+              userMap[user.id].checkIn = formattedCheckIn;
+              userMap[user.id].checkOut = formattedCheckOut;
             }
           }
         });
@@ -257,7 +286,7 @@ const Attendance = ({ role, userId }) => {
                   0,
                   Math.round((user.totalCheckInTime * 60) / user.checkInCount)
                 ),
-                "HH:mm"
+                "hh:mm a" // Changed from "HH:mm" to "hh:mm a"
               )
             : "-";
       });
@@ -692,17 +721,7 @@ const Attendance = ({ role, userId }) => {
                     <TableCell>{user.checkIn}</TableCell>
                     <TableCell>{user.checkOut}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          user.status === "Present"
-                            ? "default"
-                            : user.status === "Late"
-                            ? "warning"
-                            : "destructive"
-                        }
-                      >
-                        {user.status}
-                      </Badge>
+                      <AttendanceBadge status={user.status} />
                     </TableCell>
                     <TableCell className="text-center">{user.daysPresent}</TableCell>
                     <TableCell className="text-center">{user.daysAbsent}</TableCell>
@@ -911,6 +930,6 @@ const Attendance = ({ role, userId }) => {
       </div>
     );
 
-  };
+};
 
 export default Attendance;
