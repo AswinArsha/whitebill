@@ -149,7 +149,6 @@ const Attendance = ({ role, userId }) => {
   };
 
   const fetchAttendanceDataForMonth = async () => {
-    // Defensive check to ensure userId is defined for regular users
     if (role === "user" && (userId === null || userId === undefined)) {
       console.error("User ID is undefined for a regular user.");
       alert("User ID is undefined. Please log in again.");
