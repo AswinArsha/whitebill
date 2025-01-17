@@ -1,4 +1,3 @@
-// Home.jsx
 import React, { useState, useEffect } from "react";
 import { Link, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +21,7 @@ import Remainders from "./components/Remainders";
 import Attendance from "./components/Attendance";
 import IndividualAttendanceReport from "./components/IndividualAttendanceReport";
 import TaskSection from "./components/TaskSection";
-import { supabase } from "./supabase"; // Import supabase client
+import { supabase } from "./supabase";
 import AlertNotification from "./components/AlertNotification";
 import ProfileDropdown from "./components/ProfileDropdown";
 import NotificationDropdown from "./components/NotificationDropdown";
@@ -33,7 +32,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
   const [isTablet, setIsTablet] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [unreadTaskCount, setUnreadTaskCount] = useState(0); // State for unread tasks count
+  const [unreadTaskCount, setUnreadTaskCount] = useState(0);
 
   useEffect(() => {
     const checkDeviceSize = () => {
@@ -53,7 +52,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
       fetchUnreadTaskCount();
       subscribeToTaskAssignments();
     }
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeAllChannels();
     };
@@ -87,7 +85,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
     }
   };
 
-  // Real-time subscription to task_assignments for the current user
   const subscribeToTaskAssignments = () => {
     const channel = supabase
       .channel(`user-${userId}`)
@@ -152,7 +149,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
 
   const transitionSpeed = 0.07;
 
-  // Mapping routes to section names
   const routeNameMap = {
     "/home/calendar": "Calendar",
     "/home/billing": "Billing",
@@ -161,19 +157,15 @@ const Home = ({ role, userId, isAuthenticated }) => {
     "/home/remainders": "Remainders",
     "/home/attendance": "Attendance",
     "/home/tasks": "Task Manager",
-    // Add more mappings as needed
   };
 
-  // Determine the current section name based on the route
   const getCurrentSection = () => {
     const path = location.pathname;
     return routeNameMap[path] || "";
   };
 
-  // Conditionally render icons based on user role
   const navItems = [
     { path: "calendar", icon: <CalendarIcon className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Calendar" },
-
     ...(role === "admin"
       ? [
           { path: "billing", icon: <ReceiptText className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Billing" },
@@ -201,7 +193,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
 
   return (
     <div className="flex h-screen relative">
-      {/* Mobile Hamburger Menu */}
       {isMobile && (
         <div className="fixed top-5 z-30">
           <Button variant="outline" className="p-0 rounded-l-none" onClick={handleHamburgerClick}>
@@ -210,12 +201,10 @@ const Home = ({ role, userId, isAuthenticated }) => {
         </div>
       )}
 
-      {/* Mobile Sidebar Overlay */}
       {isMobile && sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-10" onClick={() => setSidebarOpen(false)}></div>
       )}
 
-      {/* Sidebar */}
       <motion.div
         id="sidebar"
         className={`h-full bg-white shadow-md flex flex-col justify-between absolute z-20 ${
@@ -240,7 +229,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
                 }`}
                 onClick={() => handleIconClick(item.path)}
               >
-                <Link to={item.path} className="w-full text-left flex items-center space-x-2">
+                <Link to={`/home/${item.path}`} className="w-full text-left flex items-center space-x-2">
                   {item.icon}
                   <AnimatePresence>
                     {!isCollapsed && !isMobile && (
@@ -262,21 +251,15 @@ const Home = ({ role, userId, isAuthenticated }) => {
         </Card>
       </motion.div>
 
-      {/* Main Content Area */}
       <div className={`flex-1 p-6 overflow-auto ${isMobile ? "ml-0 " : "ml-20"}`}>
-        {/* Top Navbar */}
         <div className="flex justify-between items-center mb-6">
-          {/* Section Name */}
           <h1 className="text-2xl font-bold -mb-2 ml-2 md:-ml-0">{getCurrentSection()}</h1>
-
-          {/* Right Side Icons */}
           <div className="flex space-x-6">
             <NotificationDropdown />
             <ProfileDropdown userId={userId} />
           </div>
         </div>
 
-        {/* Task Section */}
         <Routes>
           <Route path="billing" element={<Billing role={role} userId={userId} />} />
           <Route path="calendar" element={<CalendarSection role={role} userId={userId} />} />
