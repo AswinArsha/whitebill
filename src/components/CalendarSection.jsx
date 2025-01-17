@@ -149,21 +149,43 @@ const CalendarSection = ({ role, userId }) => {
   // Fetch events (modified to include assigned_user_ids)
   const fetchEvents = useCallback(async () => {
     try {
-      let baseQuery = supabase.from("events").select("*");
-      
+      // Start with the base query
+      let query = supabase.from("events").select("*");
+  
+      // Role-specific filtering
       if (role === "user") {
-        // Add extra safety check for malformed arrays
-        baseQuery = baseQuery.or(`assigned_user_ids.cs.{${userId}},assigned_user_ids.eq."{${userId}]}"}`);
+        query = query.or(`assigned_user_ids.cs.{${userId}},assigned_user_ids.eq."{${userId}]}"}`);
       }
   
-      const { data: allEvents, error: baseError } = await baseQuery;
+      // Apply category filter if not "all"
+      if (filterCategory && filterCategory !== "all") {
+        query = query.eq('category', filterCategory);
+      }
+  
+      // Apply client name filter if set
+      if (filterClientName) {
+        query = query.eq('client_name', filterClientName);
+      }
+  
+      // Apply assigned user filter if not "all"
+      if (filterAssignedUser && filterAssignedUser !== "all") {
+        query = query.contains('assigned_user_ids', [Number(filterAssignedUser)]);
+      }
+  
+      // Apply search term filter on title (adjust as necessary to search other fields)
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      }
+  
+      // Execute the query
+      const { data: allEvents, error: baseError } = await query;
   
       if (baseError) {
         throw baseError;
       }
   
-      // Clean up malformed assigned_user_ids
-      let filteredEvents = allEvents.map(event => ({
+      // Clean up malformed assigned_user_ids (if needed)
+      const filteredEvents = allEvents.map(event => ({
         ...event,
         assigned_user_ids: Array.isArray(event.assigned_user_ids) 
           ? event.assigned_user_ids 
@@ -171,8 +193,6 @@ const CalendarSection = ({ role, userId }) => {
             ? JSON.parse(event.assigned_user_ids.replace(']', '}').replace('"{', '{'))
             : []
       }));
-  
-      // Rest of your existing filtering logic...
   
       const formattedEvents = filteredEvents.map((event) => {
         const startDate = new Date(event.start_time);
@@ -201,12 +221,12 @@ const CalendarSection = ({ role, userId }) => {
       });
   
       setEvents(formattedEvents);
-  
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
   }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
+  
 
   useEffect(() => {
     fetchEvents();
