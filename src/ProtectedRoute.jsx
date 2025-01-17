@@ -9,7 +9,7 @@ import { Navigate } from 'react-router-dom';
 const roleHierarchy = {
   user: 1,
   admin: 2,
-  // Add more roles here if needed
+  superadmin: 3  // Added superadmin with highest privilege level
 };
 
 /**

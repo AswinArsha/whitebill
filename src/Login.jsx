@@ -4,23 +4,22 @@ import { Button } from "./components/ui/button";
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
   CardTitle,
-} from "./components/ui/card"; // Adjust the import path as necessary
+} from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Loader } from "lucide-react"; // Icons for show/hide password and loading spinner
-import { motion } from "framer-motion"; // For animations
+import { Eye, EyeOff, Loader } from "lucide-react";
+import { motion } from "framer-motion";
 
 const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // State to toggle password visibility
-  const [rememberMe, setRememberMe] = useState(false); // State for "Remember Me"
-  const [errors, setErrors] = useState({ username: "", password: "" }); // Separate error states
-  const [isSubmitting, setIsSubmitting] = useState(false); // State to manage submission/loading
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [errors, setErrors] = useState({ username: "", password: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const validate = () => {
@@ -47,38 +46,74 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    setErrors({ username: "", password: "" }); // Reset errors
+    setErrors({ username: "", password: "" });
 
     try {
-      const { data, error } = await supabase
+      // Get user data
+      const { data: user, error: userError } = await supabase
         .from("users")
         .select("*")
         .eq("username", username)
+        .eq("show", true)
         .single();
 
-      if (error || !data || data.password !== password) {
+      if (userError || !user || user.password !== password) {
         setErrors({ username: "Invalid username or password.", password: "" });
         setIsSubmitting(false);
         return;
       }
 
-      // Set the user's role, ID, and authentication status
-      setRole(data.role);
-      setUserId(data.id);
-      setIsAuthenticated(true);
-
-      // Persist role and userId in localStorage if "Remember Me" is checked
-      if (rememberMe) {
-        localStorage.setItem("role", data.role);
-        localStorage.setItem("userId", data.id);
+      // Allow superadmin to login regardless of subscription status
+      if (user.role === 'superadmin') {
+        handleSuccessfulLogin(user);
+        return;
       }
 
-      navigate("/home");
+      // Check subscription status for non-superadmin users
+      if (!user.subscription_status) {
+        setErrors({
+          username: "Your account is inactive. Please contact your administrator.",
+          password: ""
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Check if user has an organization assigned
+      if (!user.organization_id) {
+        setErrors({
+          username: "No organization assigned. Please contact your administrator.",
+          password: ""
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If all checks pass, proceed with login
+      handleSuccessfulLogin(user);
+
     } catch (err) {
       console.error("Login error:", err);
       setErrors({ username: "An unexpected error occurred.", password: "" });
-    } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSuccessfulLogin = (user) => {
+    setRole(user.role);
+    setUserId(user.id);
+    setIsAuthenticated(true);
+
+    if (rememberMe) {
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("userId", user.id);
+    }
+
+    // Navigate based on role
+    if (user.role === 'superadmin') {
+      navigate("/admin");
+    } else {
+      navigate("/home");
     }
   };
 
@@ -104,7 +139,7 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
                 onChange={(e) => setUsername(e.target.value)}
                 className={`mt-1 block w-full px-3 py-2 border ${
                   errors.username ? "border-red-500" : "border-gray-300"
-                } rounded-md shadow-sm `}
+                } rounded-md shadow-sm`}
                 aria-invalid={errors.username ? "true" : "false"}
               />
               {errors.username && (
@@ -133,7 +168,7 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   className={`mt-1 block w-full px-3 py-2 border ${
                     errors.password ? "border-red-500" : "border-gray-300"
-                  } rounded-md shadow-sm `}
+                  } rounded-md shadow-sm`}
                 />
                 <button
                   type="button"
@@ -159,6 +194,7 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
               )}
             </div>
 
+      
 
             {/* Submit Button */}
             <Button
