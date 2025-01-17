@@ -149,50 +149,47 @@ const CalendarSection = ({ role, userId }) => {
   // Fetch events (modified to include assigned_user_ids)
   const fetchEvents = useCallback(async () => {
     try {
-      // Start with the base query
       let query = supabase.from("events").select("*");
   
-      // Role-specific filtering
+      // Simplified role-specific filtering
       if (role === "user") {
-        query = query.or(`assigned_user_ids.cs.{${userId}},assigned_user_ids.eq."{${userId}]}"}`);
+        query = query.contains('assigned_user_ids', [userId]);
       }
   
-      // Apply category filter if not "all"
+      // Apply other filters...
       if (filterCategory && filterCategory !== "all") {
         query = query.eq('category', filterCategory);
       }
-  
-      // Apply client name filter if set
       if (filterClientName) {
         query = query.eq('client_name', filterClientName);
       }
-  
-      // Apply assigned user filter if not "all"
       if (filterAssignedUser && filterAssignedUser !== "all") {
         query = query.contains('assigned_user_ids', [Number(filterAssignedUser)]);
       }
-  
-      // Apply search term filter on title (adjust as necessary to search other fields)
       if (searchTerm) {
         query = query.ilike('title', `%${searchTerm}%`);
       }
   
-      // Execute the query
       const { data: allEvents, error: baseError } = await query;
   
       if (baseError) {
         throw baseError;
       }
   
-      // Clean up malformed assigned_user_ids (if needed)
-      const filteredEvents = allEvents.map(event => ({
-        ...event,
-        assigned_user_ids: Array.isArray(event.assigned_user_ids) 
-          ? event.assigned_user_ids 
-          : typeof event.assigned_user_ids === 'string'
-            ? JSON.parse(event.assigned_user_ids.replace(']', '}').replace('"{', '{'))
-            : []
-      }));
+      // Safely parse assigned_user_ids
+      const filteredEvents = allEvents.map(event => {
+        let assignedIds = [];
+        if (Array.isArray(event.assigned_user_ids)) {
+          assignedIds = event.assigned_user_ids;
+        } else if (typeof event.assigned_user_ids === 'string') {
+          try {
+            assignedIds = JSON.parse(event.assigned_user_ids);
+          } catch {
+            assignedIds = [];
+          }
+        }
+        return { ...event, assigned_user_ids: assignedIds };
+      });
   
       const formattedEvents = filteredEvents.map((event) => {
         const startDate = new Date(event.start_time);
@@ -213,9 +210,7 @@ const CalendarSection = ({ role, userId }) => {
             category: event.category,
             isDone: event.is_done,
             clientName: event.client_name,
-            assignedUserIds: Array.isArray(event.assigned_user_ids) 
-              ? event.assigned_user_ids 
-              : [Number(event.assigned_user_id)]
+            assignedUserIds: event.assigned_user_ids,
           },
         };
       });
@@ -225,8 +220,7 @@ const CalendarSection = ({ role, userId }) => {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
-  }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
-  
+  }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);  
 
   useEffect(() => {
     fetchEvents();
@@ -1087,3 +1081,4 @@ const CalendarSection = ({ role, userId }) => {
 };
 
 export default CalendarSection;
+
