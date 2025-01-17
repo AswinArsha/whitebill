@@ -1,10 +1,6 @@
 // CalendarSection.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import listPlugin from "@fullcalendar/list";
-import interactionPlugin from "@fullcalendar/interaction";
+import CustomCalendar from "./CustomCalendar";
 import {
   Dialog,
   DialogContent,
@@ -36,20 +32,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Menu, Trash2, Plus, Save, Printer } from "lucide-react";
 import toast, { Toaster } from 'react-hot-toast';
 import AlertNotification from "./AlertNotification";
@@ -166,64 +148,65 @@ const CalendarSection = ({ role, userId }) => {
 
   // Fetch events (modified to include assigned_user_ids)
   const fetchEvents = useCallback(async () => {
-    let query = supabase.from("events").select("*");
-
-    if (role === "user") {
-      query = query.contains("assigned_user_ids", [userId]);
-    }
-
-    if (searchTerm) {
-      query = query.or(
-        `title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,client_name.ilike.%${searchTerm}%`
-      );
-    }
-
-    if (filterCategory && filterCategory !== "all") {
-      query = query.eq("category", filterCategory);
-    }
-
-    if (filterClientName && filterClientName !== "all") { // Updated condition
-      query = query.eq("client_name", filterClientName);
-    }
-
-    if (filterAssignedUser && filterAssignedUser !== "all") { // New condition for "Assign To" filter
-      query = query.contains("assigned_user_ids", [filterAssignedUser]);
-    }
-
-    // No longer filtering by assigned_user_ids beyond admin/user roles
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching events:", error);
-    } else {
-      const formattedEvents = data.map((event) => ({
-        id: event.id,
-        title: event.title,
-        start: event.start_time,
-        end: event.end_time,
-        allDay: event.all_day,
-        backgroundColor: getCategoryColor(event.category, event.is_done),
-        borderColor: getCategoryColor(event.category, event.is_done),
-        extendedProps: {
-          description: event.description,
-          location: event.location,
-          category: event.category,
-          isDone: event.is_done,
-          clientName: event.client_name,
-          assignedUserIds: event.assigned_user_ids, // Include assignedUserIds
-        },
+    try {
+      let baseQuery = supabase.from("events").select("*");
+      
+      if (role === "user") {
+        // Add extra safety check for malformed arrays
+        baseQuery = baseQuery.or(`assigned_user_ids.cs.{${userId}},assigned_user_ids.eq."{${userId}]}"}`);
+      }
+  
+      const { data: allEvents, error: baseError } = await baseQuery;
+  
+      if (baseError) {
+        throw baseError;
+      }
+  
+      // Clean up malformed assigned_user_ids
+      let filteredEvents = allEvents.map(event => ({
+        ...event,
+        assigned_user_ids: Array.isArray(event.assigned_user_ids) 
+          ? event.assigned_user_ids 
+          : typeof event.assigned_user_ids === 'string'
+            ? JSON.parse(event.assigned_user_ids.replace(']', '}').replace('"{', '{'))
+            : []
       }));
+  
+      // Rest of your existing filtering logic...
+  
+      const formattedEvents = filteredEvents.map((event) => {
+        const startDate = new Date(event.start_time);
+        const endDate = new Date(event.end_time);
+  
+        return {
+          id: event.id,
+          uniqueKey: `${event.id}-${event.title}`,
+          title: event.title,
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          allDay: event.all_day,
+          backgroundColor: getCategoryColor(event.category, event.is_done),
+          borderColor: getCategoryColor(event.category, event.is_done),
+          extendedProps: {
+            description: event.description,
+            location: event.location,
+            category: event.category,
+            isDone: event.is_done,
+            clientName: event.client_name,
+            assignedUserIds: Array.isArray(event.assigned_user_ids) 
+              ? event.assigned_user_ids 
+              : [Number(event.assigned_user_id)]
+          },
+        };
+      });
+  
       setEvents(formattedEvents);
+  
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      toast.error("Failed to fetch events. Please try again.");
     }
-  }, [
-    role,
-    userId,
-    searchTerm,
-    filterCategory,
-    filterClientName,
-    filterAssignedUser, // Added dependency
-  ]);
+  }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
 
   useEffect(() => {
     fetchEvents();
@@ -250,27 +233,28 @@ const CalendarSection = ({ role, userId }) => {
   };
 
   // Handle opening the dialog for editing/viewing an event
-  const handleEventClick = (clickInfo) => {
+  const handleEventClick = ({ event }) => {
     if (role === "admin") {
       setMode("edit");
     } else {
       setMode("view");
     }
     setNewEvent({
-      id: clickInfo.event.id,
-      title: clickInfo.event.title,
-      description: clickInfo.event.extendedProps.description,
-      start: clickInfo.event.startStr,
-      end: clickInfo.event.endStr || clickInfo.event.startStr,
-      location: clickInfo.event.extendedProps.location,
-      category: clickInfo.event.extendedProps.category,
-      allDay: clickInfo.event.allDay,
-      isDone: clickInfo.event.extendedProps.isDone,
-      clientName: clickInfo.event.extendedProps.clientName,
-      assignedUserIds: clickInfo.event.extendedProps.assignedUserIds || [], // Fetch assigned users
+      id: event.id,
+      title: event.title,
+      description: event.extendedProps.description,
+      start: event.start,                           // Use event.start
+      end: event.end || event.start,                // Use event.end or fallback
+      location: event.extendedProps.location,
+      category: event.extendedProps.category,
+      allDay: event.allDay,
+      isDone: event.extendedProps.isDone,
+      clientName: event.extendedProps.clientName,
+      assignedUserIds: event.extendedProps.assignedUserIds || [],
     });
     setIsModalOpen(true);
   };
+  
 
   // Validation and event handlers remain unchanged
   const validateEvent = () => {
@@ -466,30 +450,26 @@ const CalendarSection = ({ role, userId }) => {
 
   // Handle Event Drop (unchanged)
   const handleEventDrop = async (dropInfo) => {
-    if (role !== "admin") return; // Only admins can move events
+    if (role !== "admin") return;
+    
     const updatedEvent = {
-      id: dropInfo.event.id,
-      start_time: dropInfo.event.allDay
-        ? `${dropInfo.event.startStr}T00:00:00Z`
-        : dropInfo.event.startStr,
-      end_time: dropInfo.event.allDay
-        ? `${dropInfo.event.endStr || dropInfo.event.startStr}T23:59:59Z`
-        : dropInfo.event.endStr || dropInfo.event.startStr,
-      all_day: dropInfo.event.allDay,
+      start_time: dropInfo.event.start,
+      end_time: dropInfo.event.end,
+      all_day: dropInfo.event.allDay
     };
-
+  
     const { error } = await supabase
       .from("events")
       .update(updatedEvent)
-      .eq("id", updatedEvent.id);
-
+      .eq("id", dropInfo.event.id);
+  
     if (error) {
       console.error("Error updating event timing:", error);
-      alert("Failed to update event timing. Please try again.");
+      toast.error("Failed to update event timing. Please try again.");
     } else {
       setEvents((currentEvents) =>
         currentEvents.map((event) =>
-          event.id === updatedEvent.id
+          event.id === dropInfo.event.id
             ? {
                 ...event,
                 start: updatedEvent.start_time,
@@ -503,15 +483,13 @@ const CalendarSection = ({ role, userId }) => {
                   event.extendedProps.category,
                   event.extendedProps.isDone
                 ),
-                extendedProps: {
-                  ...event.extendedProps,
-                  start_time: updatedEvent.start_time,
-                  end_time: updatedEvent.end_time,
-                },
               }
             : event
         )
       );
+      toast.success('Event moved successfully! 📅', {
+        duration: 3000,
+      });
     }
   };
 
@@ -796,365 +774,292 @@ const CalendarSection = ({ role, userId }) => {
               handleCloseDialog();
             }
           }}>
-            <DialogContent className=" z-[1001] max-w-3xl p-6 bg-white rounded-lg shadow-lg">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-semibold mb-2">
-                  {mode === "edit"
-                    ? "Edit Event"
-                    : mode === "add"
-                    ? "Add New Event"
-                    : "View Event"}
-                </DialogTitle>
-                <DialogDescription className="text-gray-600">
-                  {mode === "edit"
-                    ? "Update the details of the event."
-                    : mode === "add"
-                    ? "Fill in the details of the new event."
-                    : "View the details of the event and mark it as done."}
-                </DialogDescription>
-              </DialogHeader>
+          <DialogContent className="z-[1001] w-full sm:max-w-3xl p-4 sm:p-6 bg-white rounded-lg shadow-lg">
+  <DialogHeader>
+    <DialogTitle className="text-xl  sm:text-2xl font-semibold mb-2">
+      {mode === "edit"
+        ? "Edit Event"
+        : mode === "add"
+        ? "Add New Event"
+        : "View Event"}
+    </DialogTitle>
+    <DialogDescription className="text-gray-600 text-sm sm:text-base">
+      {mode === "edit"
+        ? "Update the details of the event."
+        : mode === "add"
+        ? "Fill in the details of the new event."
+        : "View the details of the event and mark it as done."}
+    </DialogDescription>
+  </DialogHeader>
 
-              {/* Dialog Form */}
-              <div className="space-y-6">
-                {/* Event Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Event Title */}
-                  <div>
-                    <Label
-                      htmlFor="title"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Event Title
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="title"
-                        value={newEvent.title}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Input
-                        id="title"
-                        value={newEvent.title}
-                        onChange={(e) =>
-                          setNewEvent({ ...newEvent, title: e.target.value })
-                        }
-                        required
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    )}
-                    {errors.title && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.title}
-                      </p>
-                    )}
-                  </div>
+  {/* Dialog Form */}
+  <div className="space-y-4 sm:space-y-6">
+    {/* Event Details */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      {/* Event Title */}
+      <div>
+        <Label htmlFor="title" className="block text-sm font-medium text-gray-700">
+          Event Title
+        </Label>
+        {mode === "view" ? (
+          <Input
+            id="title"
+            value={newEvent.title}
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Input
+            id="title"
+            value={newEvent.title}
+            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+            required
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        )}
+        {errors.title && (
+          <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+        )}
+      </div>
 
-                  {/* Client Name */}
-                  <div>
-                    <Label
-                      htmlFor="clientName"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Client Name
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="clientName"
-                        value={newEvent.clientName}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Select
-                        value={newEvent.clientName || "all"}
-                        onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, clientName: value === "all" ? "" : value })
-                        }
-                        required
-                        className="mt-1"
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a client" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
-                          <SelectItem key="all" value="all">
-                            All Clients
-                          </SelectItem>
-                          {clients.map((client) => (
-                            <SelectItem
-                              key={client.value}
-                              value={client.value}
-                            >
-                              {client.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-                {/* Category */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Category */}
-                  <div>
-                    <Label
-                      htmlFor="category"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Category
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="category"
-                        value={newEvent.category}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Select
-                        value={newEvent.category}
-                        onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, category: value })
-                        }
-                        required
-                        className="mt-1"
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
-                          {CATEGORIES.map((category) => (
-                            <SelectItem
-                              key={category.value}
-                              value={category.value}
-                            >
-                              {category.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {errors.category && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.category}
-                      </p>
-                    )}
-                  </div>
+      {/* Client Name */}
+      <div>
+        <Label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
+          Client Name
+        </Label>
+        {mode === "view" ? (
+          <Input
+            id="clientName"
+            value={newEvent.clientName}
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Select
+            value={newEvent.clientName || "all"}
+            onValueChange={(value) =>
+              setNewEvent({ ...newEvent, clientName: value === "all" ? "" : value })
+            }
+            required
+            className="mt-1"
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a client" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+              <SelectItem key="all" value="all">
+                All Clients
+              </SelectItem>
+              {clients.map((client) => (
+                <SelectItem key={client.value} value={client.value}>
+                  {client.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
 
-                  {/* Assign To (Updated Section) */}
-                  <div>
-                    <Label
-                      htmlFor="assignedUser"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Assign To
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="assignedUser"
-                        value={
-                          users
-                            .filter(user => newEvent.assignedUserIds.includes(user.value))
-                            .map(user => user.label)
-                            .join(", ")
-                        }
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Select
-                        value={newEvent.assignedUserIds.length > 0 ? newEvent.assignedUserIds[0].toString() : ""}
-                        onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, assignedUserIds: value ? [Number(value)] : [] })
-                        }
-                        className="mt-1"
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a user" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
-                          {users.map((user) => (
-                            <SelectItem
-                              key={user.value}
-                              value={user.value.toString()}
-                            >
-                              {user.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-                {/* Remarks, Location, and Assign To */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Remarks */}
-                  <div>
-                    <Label
-                      htmlFor="description"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Remarks
-                    </Label>
-                    {mode === "view" ? (
-                      <Textarea
-                        id="description"
-                        value={newEvent.description}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Textarea
-                        id="description"
-                        value={newEvent.description}
-                        onChange={(e) =>
-                          setNewEvent({
-                            ...newEvent,
-                            description: e.target.value,
-                          })
-                        }
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    )}
-                  </div>
+    {/* Category and Assign To */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      {/* Category */}
+      <div>
+        <Label htmlFor="category" className="block text-sm font-medium text-gray-700">
+          Category
+        </Label>
+        {mode === "view" ? (
+          <Input
+            id="category"
+            value={newEvent.category}
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Select
+            value={newEvent.category}
+            onValueChange={(value) =>
+              setNewEvent({ ...newEvent, category: value })
+            }
+            required
+            className="mt-1"
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+              {CATEGORIES.map((category) => (
+                <SelectItem key={category.value} value={category.value}>
+                  {category.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {errors.category && (
+          <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+        )}
+      </div>
 
-                  {/* Location */}
-                  <div>
-                    <Label
-                      htmlFor="location"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Location
-                    </Label>
-                    {mode === "view" ? (
-                      <Input
-                        id="location"
-                        value={newEvent.location}
-                        readOnly
-                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
-                      />
-                    ) : (
-                      <Input
-                        id="location"
-                        value={newEvent.location}
-                        onChange={(e) =>
-                          setNewEvent({
-                            ...newEvent,
-                            location: e.target.value,
-                          })
-                        }
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    )}
-                  </div>
-                </div>
+      {/* Assign To */}
+      <div>
+        <Label htmlFor="assignedUser" className="block text-sm font-medium text-gray-700">
+          Assign To
+        </Label>
+        {mode === "view" ? (
+          <Input
+            id="assignedUser"
+            value={
+              users
+                .filter(user => newEvent.assignedUserIds.includes(user.value))
+                .map(user => user.label)
+                .join(", ")
+            }
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Select
+            value={newEvent.assignedUserIds.length > 0 ? newEvent.assignedUserIds[0].toString() : ""}
+            onValueChange={(value) =>
+              setNewEvent({ ...newEvent, assignedUserIds: value ? [Number(value)] : [] })
+            }
+            className="mt-1"
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a user" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+              {users.map((user) => (
+                <SelectItem key={user.value} value={user.value.toString()}>
+                  {user.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
 
-                {/* Mark as Done */}
-                <MarkAsDone
-                  isDone={newEvent.isDone}
-                  eventId={newEvent.id}
-                  setEvents={setEvents}
-                  onMarkDone={() => setNewEvent((prevEvent) => ({ ...prevEvent, isDone: !prevEvent.isDone }))}
-                />
+    {/* Remarks and Location */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      {/* Remarks */}
+      <div>
+        <Label htmlFor="description" className="block text-sm font-medium text-gray-700">
+          Remarks
+        </Label>
+        {mode === "view" ? (
+          <Textarea
+            id="description"
+            value={newEvent.description}
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Textarea
+            id="description"
+            value={newEvent.description}
+            onChange={(e) =>
+              setNewEvent({
+                ...newEvent,
+                description: e.target.value,
+              })
+            }
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        )}
+      </div>
 
-              </div>
+      {/* Location */}
+      <div>
+        <Label htmlFor="location" className="block text-sm font-medium text-gray-700">
+          Location
+        </Label>
+        {mode === "view" ? (
+          <Input
+            id="location"
+            value={newEvent.location}
+            readOnly
+            className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+          />
+        ) : (
+          <Input
+            id="location"
+            value={newEvent.location}
+            onChange={(e) =>
+              setNewEvent({
+                ...newEvent,
+                location: e.target.value,
+              })
+            }
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        )}
+      </div>
+    </div>
 
-              {/* Dialog Footer */}
-              <DialogFooter className="mt-6 flex justify-end space-x-3">
-                {mode === "edit" && role === "admin" && (
-                  <Button
-                    variant="destructive"
-                    onClick={handleEventDelete}
-                    className="flex items-center space-x-2 flex-1 md:flex-none"
-                    type="button"
-                  >
-                    <Trash2
-                      className="h-4 w-4 text-white"
-                      aria-hidden="true"
-                    />
-                    <span>Delete</span>
-                  </Button>
-                )}
-                <Button
-                  onClick={handleEventAddOrUpdate}
-                  className="flex items-center space-x-2 flex-1 md:flex-none"
-                  type="button"
-                >
-                  {mode === "edit" ? (
-                    <>
-                      <Save
-                        className="h-4 w-4 text-white"
-                        aria-hidden="true"
-                      />
-                      <span>Update Event</span>
-                    </>
-                  ) : mode === "add" ? (
-                    <>
-                      <Plus
-                        className="h-4 w-4 text-white"
-                        aria-hidden="true"
-                      />
-                      <span>Add Event</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save
-                        className="h-4 w-4 text-white"
-                        aria-hidden="true"
-                      />
-                      <span>Update Event</span>
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+    {/* Mark as Done */}
+    <MarkAsDone
+      isDone={newEvent.isDone}
+      eventId={newEvent.id}
+      setEvents={setEvents}
+      onMarkDone={() =>
+        setNewEvent((prevEvent) => ({ ...prevEvent, isDone: !prevEvent.isDone }))
+      }
+    />
+  </div>
+
+  {/* Dialog Footer */}
+  <DialogFooter className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
+    {mode === "edit" && role === "admin" && (
+      <Button
+        variant="destructive"
+        onClick={handleEventDelete}
+        className="flex items-center space-x-2 w-full sm:w-auto"
+        type="button"
+      >
+        <Trash2 className="h-4 w-4 text-white" aria-hidden="true" />
+        <span>Delete</span>
+      </Button>
+    )}
+    <Button
+      onClick={handleEventAddOrUpdate}
+      className="flex items-center space-x-2 w-full sm:w-auto"
+      type="button"
+    >
+      {mode === "edit" ? (
+        <>
+          <Save className="h-4 w-4 text-white" aria-hidden="true" />
+          <span>Update Event</span>
+        </>
+      ) : mode === "add" ? (
+        <>
+          <Plus className="h-4 w-4 text-white" aria-hidden="true" />
+          <span>Add Event</span>
+        </>
+      ) : (
+        <>
+          <Save className="h-4 w-4 text-white" aria-hidden="true" />
+          <span>Update Event</span>
+        </>
+      )}
+    </Button>
+  </DialogFooter>
+</DialogContent>
+
           </Dialog>
         )}
 
         {/* FullCalendar Component */}
         <div className="bg-white shadow-none ">
-          <FullCalendar
-            ref={(element) => (calendarRef.current = element)}
-            plugins={[
-              dayGridPlugin,
-              timeGridPlugin,
-              listPlugin,
-              interactionPlugin,
-            ]}
-            initialView="dayGridMonth"
-            headerToolbar={{
-              left: "prev,next today",
-              center: "title",
-              right: "dayGridMonth,timeGridWeek,timeGridDay,listYear",
-            }}
-            events={events}
-            selectable={role === "admin"}
-            select={handleDateSelect}
-            eventClick={handleEventClick}
-            editable={role === "admin"}
-            eventDrop={handleEventDrop}
-            eventResize={handleEventResize}
-            eventChange={handleEventChange}
-            eventResizableFromStart={true}
-            aspectRatio={1.5}
-            contentHeight="auto"
-            timeZone="Asia/Kolkata"
-            handleWindowResize={true}
-            stickyHeaderDates={true}
-            dayMaxEvents={2}
-            moreLinkClick="popover"
-            eventTimeFormat={{
-              hour: "numeric",
-              minute: "2-digit",
-              meridiem: "short",
-            }}
-            dayCellClassNames="border-2 border-gray-300"
-            eventClassNames="mb-1 font-semibold"
-            dayHeaderClassNames="bg-gray-200 text-gray-700 uppercase"
-            datesSet={handleMonthChange}
-          />
+        <CustomCalendar
+  events={events}
+  onEventClick={handleEventClick}
+  onDateSelect={handleDateSelect}
+  onEventDrop={handleEventDrop}
+  role={role}
+/>
+
         </div>
       </Card>
     </div>

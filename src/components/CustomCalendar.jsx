@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback , useRef } from 'react';
 import { ChevronLeft, ChevronRight, CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,10 +20,11 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { 
   format, addDays, startOfWeek, endOfWeek, 
   startOfDay, endOfDay, isWithinInterval, isSameDay,
-  isWeekend
+  isWeekend, parseISO
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Helper function to format dates to UTC strings
 const formatToUTCString = (date, isEndTime = false) => {
   if (!date) return null;
   const d = new Date(date);
@@ -36,65 +37,71 @@ const formatToUTCString = (date, isEndTime = false) => {
 };
 
 const EventItem = ({ event, onClick, isDraggable = false, inPopover = false }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging, active } = useDraggable({
     id: event.id,
     data: { event, type: 'event' },
     disabled: !isDraggable
   });
 
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-  };
-
-  if (isDragging) {
-    return null;
+  // If this item is being dragged, render an invisible placeholder
+  if (isDragging && active?.id === event.id) {
+    return (
+      <div 
+        ref={setNodeRef}
+        className="opacity-0 invisible h-6"
+        {...attributes}
+        {...listeners}
+      />
+    );
   }
 
-  const DragHandle = () => (
-    <div 
-      className={cn(
-        "absolute left-1 top-1/2 -translate-y-1/2 bg-white rounded-full h-3 w-3",
-        "opacity-0 group-hover:opacity-70 cursor-grab active:cursor-grabbing",
-        "transition-opacity duration-200 ease-in-out"
-      )}
-      {...listeners}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-        handleDragStart(e);
-      }}
-    />
-  );
-
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       className={cn(
         "text-xs p-1 rounded shadow-sm group relative",
         "transition-all duration-200 ease-in-out",
         "hover:opacity-90 hover:scale-105 hover:shadow-md",
         isDraggable && "hover:pl-6",
-        isDragging && "opacity-50 scale-95",
         inPopover ? "mb-2 last:mb-0" : ""
       )}
-      style={{ backgroundColor: event.backgroundColor }}
+      style={{ 
+        backgroundColor: event.backgroundColor,
+        pointerEvents: isDragging ? 'none' : 'auto'
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onClick({ event });
       }}
       {...attributes}
       title={event.title}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.2 }}
     >
-      {isDraggable && <DragHandle />}
+      {isDraggable && (
+        <div 
+          className={cn(
+            "absolute left-1 top-1/2 -translate-y-1/2 bg-white rounded-full h-3 w-3",
+            "opacity-0 group-hover:opacity-70 cursor-grab active:cursor-grabbing",
+            "transition-opacity duration-200 ease-in-out"
+          )}
+          {...listeners}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+        />
+      )}
       <span className="cursor-default truncate block">{event.title}</span>
-    </motion.div>
+    </div>
   );
 };
 
 const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
   const [open, setOpen] = useState(false);
+
+  const handleClose = (e) => {
+    e.stopPropagation(); // Prevent event from bubbling up
+    setOpen(false);
+    if (onClosePopover) onClosePopover();
+  };
 
   return (
     <Popover 
@@ -109,7 +116,10 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
           type="button"
           variant="ghost" 
           className="text-xs text-gray-500 w-full h-6 p-1 transition-all duration-200 rounded-full hover:bg-gray-200 hover:scale-105"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
         >
           +{events.length} more
         </Button>
@@ -117,12 +127,15 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
       <PopoverContent 
         className="w-72 transition-transform duration-200 ease-out mb-6 backdrop-blur-sm bg-white/90" 
         align="start"
-      
-    
       >
-        <div className="flex justify-between items-center ">
+        <div className="flex justify-between items-center">
           <h3 className="font-semibold ml-2">More Events</h3>
-          <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleClose}
+            className="hover:bg-gray-100"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -145,8 +158,7 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
   );
 };
 
-const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDateClick, onClosePopover, isCompactView }) => {
-
+const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDateClick, onClosePopover }) => {
   const isToday = isSameDay(new Date(), day.date);
   const cellId = day.date.toISOString();
   
@@ -155,7 +167,6 @@ const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDa
     data: { date: day.date, type: 'cell' }
   });
 
-  // Show first 3 events
   const MAX_VISIBLE_EVENTS = 3;
   const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
   const hiddenEvents = dayEvents.slice(MAX_VISIBLE_EVENTS);
@@ -164,14 +175,12 @@ const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDa
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-32 p-2 border border-gray-200 transition-all duration-200 ease-in-out",
-        !day.isCurrentMonth && "bg-gray-50",
+        "min-h-32 p-2 border border-gray-300 transition-all duration-200 ease-in-out",
+        !day.isCurrentMonth && "bg-gray-50 text-gray-500",
         day.isWeekend && "bg-gray-50",
-        isToday && "ring-2 ring-blue-500",
-        isOver && "bg-blue-100 scale-105 shadow-lg",
+        isOver && " scale-102",
         "hover:bg-blue-50",
-        "relative",
-        isCompactView && "col-span-7"
+        "relative"
       )}
       onClick={() => {
         if (!ignoreNextDateClick) {
@@ -182,69 +191,93 @@ const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDa
       aria-label={format(day.date, 'PPPP')}
       tabIndex={0}
     >
-       <div className="text-sm font-medium mb-1">{format(day.date, 'd')}</div>
-      <div className="space-y-1">
-      {visibleEvents.map((event) => (
-          <EventItem
-            key={event.id}
-            event={event}
-            onClick={onEventClick}
-            isDraggable={role === 'admin'}
-          />
-        ))}
-        {hiddenEvents.length > 0 && (
-          <MoreEventsPopover
-            events={hiddenEvents}
-            role={role}
-            onEventClick={onEventClick}
-            onClosePopover={onClosePopover}
-          />
-        )}
+      {/* Today indicator border - placed behind content */}
+      {isToday && (
+        <div className="absolute inset-0 border-2 border-blue-500 rounded-md -m-px pointer-events-none" />
+      )}
+      
+      {/* Cell content - always on top */}
+      <div className="relative z-10">
+        <div className={cn(
+          "flex items-center justify-between mb-1",
+          isToday && "text-blue-600 font-semibold"
+        )}>
+          <span className={cn(
+            "text-sm inline-flex items-center justify-center",
+            isToday && "bg-blue-500 text-white w-6 h-6 rounded-full"
+          )}>
+            {format(day.date, 'd')}
+          </span>
+          {isToday && (
+            <span className="text-xs text-blue-600 font-medium">
+              Today
+            </span>
+          )}
+        </div>
+        <div className={cn(
+          "space-y-1",
+          isToday && "bg-blue-50/30"
+        )}>
+          {visibleEvents.map((event) => (
+            <EventItem
+              key={event.id}
+              event={event}
+              onClick={onEventClick}
+              isDraggable={role === 'admin'}
+            />
+          ))}
+          {hiddenEvents.length > 0 && (
+            <MoreEventsPopover
+              events={hiddenEvents}
+              role={role}
+              onEventClick={onEventClick}
+              onClosePopover={onClosePopover}
+            />
+          )}
+        </div>
       </div>
+      
+      {/* Drag overlay indicator */}
       {isOver && (
-        <div className="absolute inset-0 border-2 border-blue-500 rounded-lg pointer-events-none" />
+        <div className="absolute inset-0 border border-blue-500 rounded-lg pointer-events-none" />
       )}
     </div>
   );
 };
 
-const ListViewEvent = ({ event, onClick, isDraggable = false }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: event.id,
-    data: { event, type: 'event' },
-    disabled: !isDraggable
-  });
-
-  if (isDragging) return null;
+const DayView = ({ events, onEventClick, role }) => {
+  const sortedEvents = [...events].sort((a, b) => 
+    parseISO(a.start).getTime() - parseISO(b.start).getTime()
+  );
 
   return (
-    <div
-      ref={setNodeRef}
-      className="group relative flex items-center p-4 bg-white rounded-lg border hover:shadow-lg transition-all duration-150 ease-in-out"
-      {...attributes}
-      {...listeners}
-      onClick={() => onClick({ event })}
-    >
-      <div className="flex items-center min-w-0 flex-1">
-        {isDraggable && (
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-70 cursor-grab transition-opacity duration-150">
-            <div className="bg-white rounded-full h-4 w-4" />
-          </div>
-        )}
-        <div
-          className={cn(
-            "w-4 h-4 rounded-full flex-shrink-0",
-            isDraggable ? 'ml-6' : 'mr-4'
-          )}
-          style={{ backgroundColor: event.backgroundColor }}
-        />
-        <div className="min-w-0 flex-1 ml-4 cursor-pointer">
-          <div className="font-medium truncate">{event.title}</div>
-          <div className="text-sm text-gray-500 mt-0.5">
-            {format(new Date(event.start), 'h:mm a')} - {format(new Date(event.end), 'h:mm a')}
-          </div>
+    <div className="p-4 space-y-4">
+      {sortedEvents.length > 0 ? (
+        sortedEvents.map(event => (
+          <motion.div
+            key={event.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+            onClick={() => onEventClick({ event })}
+          >
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-3 h-3 rounded-full flex-shrink-0" 
+                style={{ backgroundColor: event.backgroundColor }}
+              />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium truncate">{event.title}</h3>
+              
+              </div>
+            </div>
+          </motion.div>
+        ))
+      ) : (
+        <div className="text-center text-gray-500 py-8">
+          No events scheduled for today
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -268,7 +301,18 @@ const CustomCalendar = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [ignoreNextDateClick, setIgnoreNextDateClick] = useState(false);
   const [localEvents, setLocalEvents] = useState(events);
-  const [isCompactView, setIsCompactView] = useState(false);
+  const [draggedEvent, setDraggedEvent] = useState(null);
+  const dragTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // Force re-render of events periodically to ensure visibility
+    const interval = setInterval(() => {
+      setLocalEvents(prev => [...prev]);
+    }, 1000);
+  
+    return () => clearInterval(interval);
+  }, []);
+  
 
   useEffect(() => {
     setLocalEvents(events);
@@ -319,7 +363,6 @@ const CustomCalendar = ({
       date.getDate()
     ).getTime();
   
-    // Use a Set to track unique events
     const uniqueEvents = new Set();
   
     return localEvents.filter(event => {
@@ -330,7 +373,6 @@ const CustomCalendar = ({
         eventStart.getDate()
       ).getTime();
   
-      // Check if we've seen this unique event before
       if (uniqueEvents.has(event.uniqueKey)) {
         return false;
       }
@@ -371,7 +413,9 @@ const CustomCalendar = ({
 
   const handleDragStart = (event) => {
     if (role !== 'admin') return;
+    const eventData = localEvents.find(e => e.id === event.active.id);
     setActiveId(event.active.id);
+    setDraggedEvent(eventData);
   };
 
   const handleDragEnd = async (event) => {
@@ -379,7 +423,11 @@ const CustomCalendar = ({
     const { active, over } = event;
     
     if (!over) {
-      setActiveId(null);
+      // Clear dragged state after a short delay
+      dragTimeoutRef.current = setTimeout(() => {
+        setActiveId(null);
+        setDraggedEvent(null);
+      }, 50);
       return;
     }
 
@@ -404,7 +452,12 @@ const CustomCalendar = ({
         allDay: draggedEvent.allDay
       };
 
-      setLocalEvents(prev =>
+      // Clear drag state first
+      setActiveId(null);
+      setDraggedEvent(null);
+
+      // Update local state
+      setLocalEvents(prev => 
         prev.map(e => (e.id === draggedEvent.id ? updatedEvent : e))
       );
 
@@ -412,18 +465,26 @@ const CustomCalendar = ({
         await onEventDrop({ event: updatedEvent });
       } catch (error) {
         console.error('Error updating event:', error);
+        setLocalEvents(prev =>
+          prev.map(e => (e.id === draggedEvent.id ? draggedEvent : e))
+        );
       }
     }
-
-    setActiveId(null);
   };
+
+  // Cleanup drag timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleClosePopover = () => {
     setIgnoreNextDateClick(true);
     setTimeout(() => setIgnoreNextDateClick(false), 300);
   };
-
-  const draggedEvent = localEvents.find(e => e.id === activeId);
 
   return (
     <DndContext
@@ -434,112 +495,107 @@ const CustomCalendar = ({
     >
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
         {/* Calendar Header */}
-        <div className={cn("p-4 flex flex-col sm:flex-row justify-between items-center", theme.headerBg)}>
-          <div className="flex items-center space-x-4 mb-2 sm:mb-0">
-            <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)} aria-label="Previous month" className="transition-all duration-200 hover:shadow-md hover:bg-gray-100">
+        <div className={cn("p-4 flex flex-col md:flex-row justify-between items-center gap-4", theme.headerBg)}>
+          <div className="flex items-center space-x-4 w-full md:w-auto">
+            <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="flex items-center space-x-2" aria-label="Select date">
-                  <CalendarIcon className="h-4 w-4" />
-                  <h2 className="text-xl font-semibold">{format(currentDate, 'MMMM yyyy')}</h2>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={currentDate}
-                  onSelect={(date) => {
-                    setCurrentDate(date || new Date());
-                    setIsDatePickerOpen(false);
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            <Button variant="outline" size="icon" onClick={() => navigateMonth(1)} aria-label="Next month" className="transition-all duration-200 hover:shadow-md hover:bg-gray-100">
+            <Button 
+              variant="outline" 
+              className="flex-1 md:flex-none items-center space-x-2"
+              onClick={() => setIsDatePickerOpen(true)}
+            >
+              <CalendarIcon className="h-4 w-4 hidden md:inline" />
+              <span className="font-semibold">
+                {format(currentDate, 'MMMM yyyy')}
+              </span>
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="secondary" onClick={() => setCurrentDate(new Date())} className="ml-2 transition-transform hover:scale-105">
+          </div>
+          <div className="flex space-x-2 w-full md:w-auto justify-end">
+            <Button variant="secondary" onClick={() => setCurrentDate(new Date())}>
               Today
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsCompactView(!isCompactView)}
-              className="ml-2 transition-transform hover:scale-105"
-            >
-              {isCompactView ? "Expanded" : "Compact"}
-            </Button>
-          </div>
-          <div className="flex space-x-2">
-            {['month', 'week', 'list'].map(mode => (
-              <Button
-                key={mode}
-                variant={view === mode ? 'default' : 'outline'}
-                onClick={() => setView(mode)}
-                className="text-sm transition-colors duration-150"
-              >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </Button>
-            ))}
+            <div className="flex space-x-2">
+              {['month', 'day'].map(mode => (
+                <Button
+                  key={mode}
+                  variant={view === mode ? 'default' : 'outline'}
+                  onClick={() => setView(mode)}
+                  className="text-sm"
+                >
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Calendar Grid */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentDate.toISOString()}
+            key={`${view}-${currentDate.toISOString()}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
             className="border-t border-gray-200"
           >
-            <div className={cn("grid gap-px bg-gray-200", isCompactView ? "grid-cols-1" : "grid-cols-7")}>
-              {!isCompactView && ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div 
-                  key={day} 
-                  className="p-2 text-center font-semibold bg-gray-100 text-xs sm:text-sm"
-                  role="columnheader"
-                  aria-label={day}
-                >
-                  {day}
+            {view === 'month' ? (
+              <div className="w-full">
+                {/* Week day headers - only show on md and above */}
+                <div className="hidden md:grid md:grid-cols-7 w-full">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div 
+                      key={day} 
+                      className="p-2 text-center font-semibold bg-gray-100 text-sm border-b border-gray-200"
+                    >
+                      {day}
+                    </div>
+                  ))}
                 </div>
-              ))}
 
-              {view === 'month' && (isCompactView ? getCalendarDays().slice(0, 7) : getCalendarDays()).map(day => (
-                <DayCell
-                  key={day.date.toISOString()}
-                  day={day}
-                  dayEvents={getEventsForDate(day.date)}
-                  onDateClick={handleDateClick}
-                  onEventClick={onEventClick}
-                  role={role}
-                  ignoreNextDateClick={ignoreNextDateClick}
-                  onClosePopover={handleClosePopover}
-                  isCompactView={isCompactView}
-                />
-              ))}
-            </div>
+                {/* Calendar Grid */}
+                <div className="md:grid md:grid-cols-7 flex flex-col">
+                  {getCalendarDays().map(day => (
+                    <DayCell
+                      key={day.date.toISOString()}
+                      day={day}
+                      dayEvents={getEventsForDate(day.date)}
+                      onDateClick={handleDateClick}
+                      onEventClick={onEventClick}
+                      role={role}
+                      ignoreNextDateClick={ignoreNextDateClick}
+                      onClosePopover={handleClosePopover}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <DayView 
+                events={getEventsForDate(currentDate)}
+                onEventClick={onEventClick}
+                role={role}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
 
         <DragOverlay modifiers={[restrictToWindowEdges]}>
-          {draggedEvent ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ 
-                opacity: 1, 
-                scale: 1,
-                transition: { duration: 0.2, ease: [0.18, 0.67, 0.6, 1.22] }
+          {draggedEvent && (
+            <div
+              className="text-xs p-2 rounded-lg shadow-xl bg-white border-2 pointer-events-none"
+              style={{ 
+                backgroundColor: draggedEvent.backgroundColor,
+                transform: 'scale(1.05)',
+                transition: 'transform 200ms cubic-bezier(0.18, 0.67, 0.6, 1.22)'
               }}
-              className="text-xs p-2 rounded-lg shadow-xl bg-white border-2"
-              style={{ backgroundColor: draggedEvent.backgroundColor, cursor: 'grabbing' }}
             >
               <span className="font-medium">{draggedEvent.title}</span>
-            </motion.div>
-          ) : null}
+            </div>
+          )}
         </DragOverlay>
       </div>
     </DndContext>
@@ -547,12 +603,3 @@ const CustomCalendar = ({
 };
 
 export default CustomCalendar;
-
-, this is built using react , shadcn and supabase.
-i need some improvements like :
-1) no need for compact and expand button,for laptop view it should show 7 days per row and for mobilw it should show 1 day per row, thats how i want
-2) remove the week view and list view but add a day view which shows the current days events all like a list .
-3)add black borders in each day cell , to make the user feel and understand that each day cells are separate
-
-
-3)sometimes when i drag and drop and event , that dropped event becomes invisible , but when i refresh the webpage or click on the day it shows events, this is only happens sometimes fix this issues.
