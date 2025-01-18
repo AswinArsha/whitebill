@@ -21,19 +21,20 @@ const InvoicePrintComponent = React.forwardRef(({ items, total, additionalBills,
     }}>
       {/* Header Section */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "30px" }}>
-        <div style={{ display: "flex", alignItems: "center", marginLeft: "-35px" }}>
-          <img src={Logo} alt="Logo" style={{ width: '250px', height: '170px' }} />
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <h1 style={{ fontFamily: "RoxboroughCF", fontSize: "28pt", margin: "0", color: "#333" }}>INVOICE</h1>
-          <p style={{ fontFamily: "Inter", fontSize: "12pt", marginTop: "10px", color: "#555" }}>
-            Date: {date || "Date Not Specified"}
-          </p>
-          <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>
-            Invoice No: {invoiceNumber || "N/A"}
-          </p>
-        </div>
-      </div>
+  <div style={{ display: "flex", alignItems: "center", marginLeft: "-35px", marginRight: "150px" }}>
+    <img src={Logo} alt="Logo" style={{ width: '250px', height: '170px' }} />
+  </div>
+  <div style={{ textAlign: "right" }}>
+    <h1 style={{ fontFamily: "RoxboroughCF", fontSize: "28pt", margin: "0", color: "#333" }}>INVOICE</h1>
+    <p style={{ fontFamily: "Inter", fontSize: "12pt", marginTop: "10px", color: "#555" }}>
+      Date: {date || "Date Not Specified"}
+    </p>
+    <p style={{ fontFamily: "Inter", fontSize: "12pt", color: "#555" }}>
+      Invoice No: {invoiceNumber || "N/A"}
+    </p>
+  </div>
+</div>
+
 
       {/* Billing Information Section */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "40px" }}>

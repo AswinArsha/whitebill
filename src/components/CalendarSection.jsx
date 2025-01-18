@@ -1,4 +1,4 @@
-// CalendarSection.jsx
+// components/CalendarSection.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import CustomCalendar from "./CustomCalendar";
 import {
@@ -44,7 +44,7 @@ const CATEGORIES = [
   { value: "editing", label: "Editing" },
   { value: "ad_campaign", label: "Ad Campaign" },
   { value: "poster_design", label: "Poster Design" },
-  { value: "task", label: "Task" }, 
+  { value: "task", label: "Task" },
 ];
 
 const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGORIES];
@@ -52,27 +52,19 @@ const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGOR
 const getCategoryColor = (category, isDone) => {
   if (isDone) return "#4caf50"; // Green for done events
   switch (category) {
-    case "shoot":
-      return "#f06543";  
-    case "meeting":
-      return "#0582ca";  
-    case "post":
-      return "#f48c06"; 
-    case "editing":
-      return "#9d4edd";  
-    case "ad_campaign":
-      return "#ad2831";  
-    case "poster_design":
-      return "#ffc300";  
-    case "task":
-      return "#335c67";  
-    default:
-      return "#6c757d";  
+    case "shoot": return "#f06543";  
+    case "meeting": return "#0582ca";  
+    case "post": return "#f48c06"; 
+    case "editing": return "#9d4edd";  
+    case "ad_campaign": return "#ad2831";  
+    case "poster_design": return "#ffc300";  
+    case "task": return "#335c67";  
+    default: return "#6c757d";  
   }
 };
 
 const CalendarSection = ({ role, userId }) => {
-  // Existing state variables
+  // State variables
   const [events, setEvents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -86,77 +78,52 @@ const CalendarSection = ({ role, userId }) => {
     allDay: false,
     isDone: false,
     clientName: "",
-    assignedUserIds: [], // Using array to store assigned user IDs
+    assignedUserIds: [],
   });
-  const [mode, setMode] = useState(null); // 'add', 'edit', 'view'
+  const [mode, setMode] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterClientName, setFilterClientName] = useState(""); // Initialize as empty string
-  const [filterAssignedUser, setFilterAssignedUser] = useState("all"); // New state for "Assign To" filter
+  const [filterClientName, setFilterClientName] = useState("");
+  const [filterAssignedUser, setFilterAssignedUser] = useState("all");
   const [isPrinting, setIsPrinting] = useState(false);
   const [errors, setErrors] = useState({ title: "", category: "" });
   const [clients, setClients] = useState([]);
-  const [users, setUsers] = useState([]); // New state for users
-  // Removed filterClientPopoverOpen as it's no longer needed
+  const [users, setUsers] = useState([]);
   const calendarRef = useRef(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch clients (unchanged)
+  // Fetch clients
   const fetchClients = async () => {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("client_name")
-      .order("client_name");
-    if (error) {
-      console.error("Error fetching clients:", error);
-    } else {
-      setClients(
-        data.map((client) => ({
-          value: client.client_name,
-          label: client.client_name,
-        }))
-      );
+    const { data, error } = await supabase.from("clients").select("client_name").order("client_name");
+    if (error) console.error("Error fetching clients:", error);
+    else {
+      setClients(data.map((client) => ({ value: client.client_name, label: client.client_name })));
     }
   };
 
-  // Fetch users with show = true (updated function)
+  // Fetch users
   const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, name")
-      .eq("show", true) // Filter by 'show' column
-      .order("name");
-
-    if (error) {
-      console.error("Error fetching users:", error);
-    } else {
-      setUsers(
-        data.map((user) => ({
-          value: user.id,
-          label: user.name,
-        }))
-      );
+    const { data, error } = await supabase.from("users").select("id, name").eq("show", true).order("name");
+    if (error) console.error("Error fetching users:", error);
+    else {
+      setUsers(data.map((user) => ({ value: user.id, label: user.name })));
     }
   };
 
   useEffect(() => {
     fetchClients();
-    fetchUsers(); // Fetch users on component mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchUsers();
   }, [role]);
 
-  // Fetch events (modified to include assigned_user_ids)
   const fetchEvents = useCallback(async () => {
     try {
       let query = supabase.from("events").select("*");
-  
-      // Simplified role-specific filtering
+
       if (role === "user") {
         query = query.contains('assigned_user_ids', [userId]);
       }
-  
-      // Apply other filters...
+
       if (filterCategory && filterCategory !== "all") {
         query = query.eq('category', filterCategory);
       }
@@ -169,19 +136,14 @@ const CalendarSection = ({ role, userId }) => {
       if (searchTerm) {
         query = query.ilike('title', `%${searchTerm}%`);
       }
-  
+
       const { data: allEvents, error: baseError } = await query;
-  
-      if (baseError) {
-        throw baseError;
-      }
-  
-      // Safely parse assigned_user_ids
+      if (baseError) throw baseError;
+
       const filteredEvents = allEvents.map(event => {
         let assignedIds = [];
-        if (Array.isArray(event.assigned_user_ids)) {
-          assignedIds = event.assigned_user_ids;
-        } else if (typeof event.assigned_user_ids === 'string') {
+        if (Array.isArray(event.assigned_user_ids)) assignedIds = event.assigned_user_ids;
+        else if (typeof event.assigned_user_ids === 'string') {
           try {
             assignedIds = JSON.parse(event.assigned_user_ids);
           } catch {
@@ -190,11 +152,11 @@ const CalendarSection = ({ role, userId }) => {
         }
         return { ...event, assigned_user_ids: assignedIds };
       });
-  
+
       const formattedEvents = filteredEvents.map((event) => {
         const startDate = new Date(event.start_time);
         const endDate = new Date(event.end_time);
-  
+
         return {
           id: event.id,
           uniqueKey: `${event.id}-${event.title}`,
@@ -214,16 +176,35 @@ const CalendarSection = ({ role, userId }) => {
           },
         };
       });
-  
+
       setEvents(formattedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
-  }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);  
+  }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
 
   useEffect(() => {
     fetchEvents();
+  }, [fetchEvents]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('custom-all-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        (payload) => {
+          console.log('Realtime change received!', payload);
+          fetchEvents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchEvents]);
 
   // Handle opening the dialog for adding an event

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import PrintUI from "./PrintUI";
-import GSTbill from "./GSTbill"; 
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,7 @@ import {
 import { Menu } from "lucide-react";
 import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Eye, Wallet, DollarSign, Printer, Check } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -396,52 +396,48 @@ const Billing = ({ role, userId }) => {
               </CardHeader>
               <CardContent className="px-6">
               <div className="mb-6">
-  <Label
-    htmlFor="dateRange"
-    className="block text-sm font-medium text-gray-700 mb-2"
-  >
-    Select Date Range
-  </Label>
-  <div className={cn("grid gap-2")}>
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          id="dateRange"
-          variant="outline"
-          className={cn(
-            "w-full justify-start text-left font-normal",
-            !dateRange.from && "text-gray-500"
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {dateRange?.from ? (
-            dateRange.to ? (
-              <>
-                {format(dateRange.from, "LLL dd, y")} -{" "}
-                {format(dateRange.to, "LLL dd, y")}
-              </>
-            ) : (
-              format(dateRange.from, "LLL dd, y")
-            )
-          ) : (
-            <span>Pick a date range</span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          initialFocus
-          mode="range"
-          defaultMonth={dateRange?.from || new Date()}
-          selected={dateRange}
-          onSelect={setDateRange}
-          numberOfMonths={2}
-        />
-      </PopoverContent>
-    </Popover>
-  </div>
-</div>
-
+              <Label
+                htmlFor="dateRange"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Select Date Range
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="dateRange"
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange.from && "text-gray-500"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(new Date(dateRange.from), "dd/MM/yyyy")} -{" "}
+                          {format(new Date(dateRange.to), "dd/MM/yyyy")}
+                        </>
+                      ) : (
+                        format(new Date(dateRange.from), "dd/MM/yyyy")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
 
             {/* Client Selection */}
             <div className="mb-6">
@@ -642,19 +638,16 @@ const Billing = ({ role, userId }) => {
               />
             </div>
                 
-            <Button
-          onClick={async () => {
-            try {
-              await handleBillGenerated();
-              // Optionally show success toast/message here
-            } catch (error) {
-              console.error('Error adding bill:', error);
-            }
-          }}
-          className="mt-4 w-full text-white flex items-center justify-center space-x-2 "
-        >
-          Add Bill
-        </Button>
+                <PrintUI
+                  items={items}
+                  total={manualTotal}
+                  additionalBills={additionalBills}
+                  onBillGenerated={handleBillGenerated}
+                  date={formattedDate}
+                  clientDetails={clientDetails}
+                  invoiceNumber={invoiceNumber}
+                  createdAt={createdAt}
+                />
               </CardContent>
             </Card>
 
@@ -778,11 +771,12 @@ const Billing = ({ role, userId }) => {
         </TabsContent>
 
         <TabsContent value="gst">
-  <div className="p-4">
-    <GSTbill />
-  </div>
-</TabsContent>
-
+          <div className="p-4">
+            <h2 className="text-2xl font-semibold mb-4">GST Invoice</h2>
+            <p>GST Invoice functionality will be added here.</p>
+            {/* Placeholder for future GST invoice details */}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Payment Mode Dialog */}
@@ -922,24 +916,24 @@ const Billing = ({ role, userId }) => {
                 Total: ₹{parseFloat(viewBill.total).toFixed(2)}
               </div>
 
-              <PrintUI
-          items={viewBill.items}
-          total={viewBill.total}
-          additionalBills={viewBill.additional_bills}
-          onBillGenerated={async () => {
-            // Since the bill is already generated and available in viewBill,
-            // simply return its invoice details.
-            return {
-              invoice_number: viewBill.invoice_number,
-              created_at: viewBill.created_at,
-            };
-          }}
-          date={viewBill.date}
-          clientDetails={viewBill.client_details}
-          invoiceNumber={viewBill.invoice_number}
-          createdAt={viewBill.created_at}
-        />
+              {/* Removed Print Buttons from View Bill Dialog to avoid undefined errors */}
 
+              {/* Hidden Invoice Components for Printing (unchanged, but not used here) */}
+              <div style={{ display: "none" }}>
+                <InvoicePrintComponent
+                  ref={standardRef}
+                  items={viewBill.items}
+                  total={viewBill.total}
+                  additionalBills={viewBill.additional_bills}
+                  date={viewBill.date}
+                  clientDetails={viewBill.client_details}
+                  invoiceNumber={viewBill.invoice_number}
+                />
+                <GSTInvoice
+                  ref={gstRef}
+                  invoiceData={{ /* GSTInvoice data */ }}
+                />
+              </div>
             </div>
           )}
         </DialogContent>

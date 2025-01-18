@@ -59,7 +59,7 @@ const EventItem = ({ event, onClick, isDraggable = false, inPopover = false }) =
     <div
       ref={setNodeRef}
       className={cn(
-        "text-xs p-1 rounded shadow-sm group relative",
+        "text-xs text-white font-medium p-1 rounded shadow-sm group relative",
         "transition-all duration-200 ease-in-out",
         "hover:opacity-90 hover:scale-105 hover:shadow-md",
         isDraggable && "hover:pl-6",
