@@ -598,8 +598,113 @@ const Attendance = ({ userId }) => {
                         <span>Add Staff</span>
                       </Button>
                     </DialogTrigger>
-                    {/* Add Staff Dialog Content */}
-                    {/* ... (previous dialog content remains the same) ... */}
+                    {userRole  === "admin" && (
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Staff</DialogTitle>
+                      <DialogDescription>
+                        Fill in the details of the new staff member.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={(e) => { e.preventDefault(); handleAddStaff(); }}>
+                      {/* Name */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-name" className="block mb-1">
+                          Name
+                        </Label>
+                        <Input
+                          id="new-name"
+                          placeholder="Enter name"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Department */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-department" className="block mb-1">
+                          Department
+                        </Label>
+                        <Input
+                          id="new-department"
+                          placeholder="Enter department"
+                          value={newDepartment}
+                          onChange={(e) => setNewDepartment(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Position */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-position" className="block mb-1">
+                          Position
+                        </Label>
+                        <Input
+                          id="new-position"
+                          placeholder="Enter position"
+                          value={newPosition}
+                          onChange={(e) => setNewPosition(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Username */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-username" className="block mb-1">
+                          Username
+                        </Label>
+                        <Input
+                          id="new-username"
+                          placeholder="Enter username"
+                          value={newUsername}
+                          onChange={(e) => setNewUsername(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Password */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-password" className="block mb-1">
+                          Password
+                        </Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          placeholder="Enter password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Role */}
+                      <div className="mb-4">
+                        <Label htmlFor="new-role" className="block mb-1">
+                          Role
+                        </Label>
+                        <Select value={newRole} onValueChange={setNewRole}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Submit Button */}
+                      <Button type="submit" className="w-full flex items-center space-x-2">
+                        <Plus className="h-4 w-4" />
+                        <span>Add Staff</span>
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              )}
                   </Dialog>
                 </>
               )}
