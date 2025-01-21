@@ -357,32 +357,16 @@ const CustomCalendar = ({
   }, [navigateMonth]);
 
   const getEventsForDate = useCallback((date) => {
-    const targetDate = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate()
-    ).getTime();
-  
-    const uniqueEvents = new Set();
-  
+    // Set time to start of day in IST
+    const istDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
     return localEvents.filter(event => {
-      const eventStart = new Date(event.start);
-      const eventStartDay = new Date(
-        eventStart.getFullYear(),
-        eventStart.getMonth(),
-        eventStart.getDate()
-      ).getTime();
-  
-      if (uniqueEvents.has(event.uniqueKey)) {
-        return false;
-      }
-  
-      if (targetDate === eventStartDay) {
-        uniqueEvents.add(event.uniqueKey);
-        return true;
-      }
-  
-      return false;
+      const eventDate = new Date(event.start);
+      return (
+        istDate.getDate() === eventDate.getDate() &&
+        istDate.getMonth() === eventDate.getMonth() &&
+        istDate.getFullYear() === eventDate.getFullYear()
+      );
     });
   }, [localEvents]);
   
