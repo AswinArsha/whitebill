@@ -357,15 +357,22 @@ const CustomCalendar = ({
   }, [navigateMonth]);
 
   const getEventsForDate = useCallback((date) => {
-    // Set time to start of day in IST
-    const istDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    
+    const startOfDayDate = startOfDay(date);
+    const endOfDayDate = endOfDay(date);
+  
     return localEvents.filter(event => {
-      const eventDate = new Date(event.start);
-      return (
-        istDate.getDate() === eventDate.getDate() &&
-        istDate.getMonth() === eventDate.getMonth() &&
-        istDate.getFullYear() === eventDate.getFullYear()
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+  
+      // Check if the event falls within the day
+      return isWithinInterval(startOfDayDate, {
+        start: startOfDay(eventStart),
+        end: endOfDay(eventEnd)
+      }) || isWithinInterval(endOfDayDate, {
+        start: startOfDay(eventStart),
+        end: endOfDay(eventEnd)
+      }) || (
+        eventStart <= startOfDayDate && eventEnd >= endOfDayDate
       );
     });
   }, [localEvents]);

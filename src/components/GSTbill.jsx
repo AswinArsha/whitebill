@@ -351,7 +351,7 @@ const GSTBill = () => {
                     <div>Phone No: 8606378902</div>
                   </div>
                 </td>
-                <td className="align-top p-0 border-r-2 border-b-2 border-black">
+                <td className="align-top p-0  border-b-2 border-black">
               <div className="font-bold border-b-2 border-black px-3 py-2 text-lg">Buyer</div>
               <div className="mt-1 px-2 py-2">
                 {selectedCompany && (
@@ -421,17 +421,19 @@ const GSTBill = () => {
           )}
         </td>
         <td className="p-2 text-right">
-          {index === 1 ? (
-            <Input
-              type="text"
-              value={item.amount}
-              onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
-              className="h-6 text-base p-1 text-right w-full"
-            />
-          ) : (
-            <span>{item.amount}</span>
-          )}
-        </td>
+  {index === 1 ? (
+    <Input
+      type="text"
+      value={item.amount}
+      onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
+      className="h-6 text-base p-1 text-right w-full"
+    />
+  ) : (
+    <span>{/* Show nothing for other indexes */}</span>
+  )}
+</td>
+
+
       </tr>
     ))}
   </tbody>

@@ -119,11 +119,11 @@ const CalendarSection = ({ role, userId }) => {
   const fetchEvents = useCallback(async () => {
     try {
       let query = supabase.from("events").select("*");
-
+  
       if (role === "user") {
         query = query.contains('assigned_user_ids', [userId]);
       }
-
+  
       if (filterCategory && filterCategory !== "all") {
         query = query.eq('category', filterCategory);
       }
@@ -136,27 +136,32 @@ const CalendarSection = ({ role, userId }) => {
       if (searchTerm) {
         query = query.ilike('title', `%${searchTerm}%`);
       }
-
+  
       const { data: allEvents, error: baseError } = await query;
       if (baseError) throw baseError;
-
+  
       const filteredEvents = allEvents.map(event => {
         let assignedIds = [];
-        if (Array.isArray(event.assigned_user_ids)) assignedIds = event.assigned_user_ids;
-        else if (typeof event.assigned_user_ids === 'string') {
+        if (Array.isArray(event.assigned_user_ids)) {
+          assignedIds = event.assigned_user_ids;
+        } else if (typeof event.assigned_user_ids === 'string') {
           try {
             assignedIds = JSON.parse(event.assigned_user_ids);
           } catch {
             assignedIds = [];
           }
         }
-        return { ...event, assigned_user_ids: assignedIds };
-      });
-
-      const formattedEvents = filteredEvents.map((event) => {
+  
+        // Ensure proper date handling for start and end times
         const startDate = new Date(event.start_time);
         const endDate = new Date(event.end_time);
-
+  
+        // Adjust for all-day events
+        if (event.all_day) {
+          startDate.setHours(0, 0, 0, 0);
+          endDate.setHours(23, 59, 59, 999);
+        }
+  
         return {
           id: event.id,
           uniqueKey: `${event.id}-${event.title}`,
@@ -172,12 +177,12 @@ const CalendarSection = ({ role, userId }) => {
             category: event.category,
             isDone: event.is_done,
             clientName: event.client_name,
-            assignedUserIds: event.assigned_user_ids,
+            assignedUserIds: assignedIds,
           },
         };
       });
-
-      setEvents(formattedEvents);
+  
+      setEvents(filteredEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
