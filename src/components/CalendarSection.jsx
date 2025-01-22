@@ -152,22 +152,15 @@ const CalendarSection = ({ role, userId }) => {
           }
         }
   
-        // Ensure proper date handling for start and end times
+        // Only use start_time for determining event placement
         const startDate = new Date(event.start_time);
-        const endDate = new Date(event.end_time);
-  
-        // Adjust for all-day events
-        if (event.all_day) {
-          startDate.setHours(0, 0, 0, 0);
-          endDate.setHours(23, 59, 59, 999);
-        }
-  
+        
         return {
           id: event.id,
           uniqueKey: `${event.id}-${event.title}`,
           title: event.title,
           start: startDate.toISOString(),
-          end: endDate.toISOString(),
+          end: new Date(event.end_time).toISOString(), // Keep end time for event details but don't use for placement
           allDay: event.all_day,
           backgroundColor: getCategoryColor(event.category, event.is_done),
           borderColor: getCategoryColor(event.category, event.is_done),
@@ -188,7 +181,6 @@ const CalendarSection = ({ role, userId }) => {
       toast.error("Failed to fetch events. Please try again.");
     }
   }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
-
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
