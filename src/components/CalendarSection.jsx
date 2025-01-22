@@ -731,7 +731,7 @@ const CalendarSection = ({ role, userId }) => {
             <SelectTrigger>
               <SelectValue placeholder="All Assigned Users" />
             </SelectTrigger>
-            <SelectContent className="max-h-100 overflow-y-auto relative z-[1050]">
+            <SelectContent className="max-h-80 overflow-y-auto relative z-[1050]">
               <SelectItem key="all" value="all">
                 All Assigned Users
               </SelectItem>
