@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback , useRef } from 'react';
 import { ChevronLeft, ChevronRight, CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -357,12 +359,15 @@ const CustomCalendar = ({
   }, [navigateMonth]);
 
   const getEventsForDate = useCallback((date) => {
+    // Set time to start of day in IST
+    const istDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
     return localEvents.filter(event => {
-      const eventStartDate = new Date(event.start);
+      const eventDate = new Date(event.start);
       return (
-        eventStartDate.getDate() === date.getDate() &&
-        eventStartDate.getMonth() === date.getMonth() &&
-        eventStartDate.getFullYear() === date.getFullYear()
+        istDate.getDate() === eventDate.getDate() &&
+        istDate.getMonth() === eventDate.getMonth() &&
+        istDate.getFullYear() === eventDate.getFullYear()
       );
     });
   }, [localEvents]);

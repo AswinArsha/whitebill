@@ -119,11 +119,11 @@ const CalendarSection = ({ role, userId }) => {
   const fetchEvents = useCallback(async () => {
     try {
       let query = supabase.from("events").select("*");
-  
+
       if (role === "user") {
         query = query.contains('assigned_user_ids', [userId]);
       }
-  
+
       if (filterCategory && filterCategory !== "all") {
         query = query.eq('category', filterCategory);
       }
@@ -136,31 +136,33 @@ const CalendarSection = ({ role, userId }) => {
       if (searchTerm) {
         query = query.ilike('title', `%${searchTerm}%`);
       }
-  
+
       const { data: allEvents, error: baseError } = await query;
       if (baseError) throw baseError;
-  
+
       const filteredEvents = allEvents.map(event => {
         let assignedIds = [];
-        if (Array.isArray(event.assigned_user_ids)) {
-          assignedIds = event.assigned_user_ids;
-        } else if (typeof event.assigned_user_ids === 'string') {
+        if (Array.isArray(event.assigned_user_ids)) assignedIds = event.assigned_user_ids;
+        else if (typeof event.assigned_user_ids === 'string') {
           try {
             assignedIds = JSON.parse(event.assigned_user_ids);
           } catch {
             assignedIds = [];
           }
         }
-  
-        // Only use start_time for determining event placement
+        return { ...event, assigned_user_ids: assignedIds };
+      });
+
+      const formattedEvents = filteredEvents.map((event) => {
         const startDate = new Date(event.start_time);
-        
+        const endDate = new Date(event.end_time);
+
         return {
           id: event.id,
           uniqueKey: `${event.id}-${event.title}`,
           title: event.title,
           start: startDate.toISOString(),
-          end: new Date(event.end_time).toISOString(), // Keep end time for event details but don't use for placement
+          end: endDate.toISOString(),
           allDay: event.all_day,
           backgroundColor: getCategoryColor(event.category, event.is_done),
           borderColor: getCategoryColor(event.category, event.is_done),
@@ -170,17 +172,18 @@ const CalendarSection = ({ role, userId }) => {
             category: event.category,
             isDone: event.is_done,
             clientName: event.client_name,
-            assignedUserIds: assignedIds,
+            assignedUserIds: event.assigned_user_ids,
           },
         };
       });
-  
-      setEvents(filteredEvents);
+
+      setEvents(formattedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
   }, [role, userId, searchTerm, filterCategory, filterClientName, filterAssignedUser]);
+
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
@@ -1052,6 +1055,7 @@ const CalendarSection = ({ role, userId }) => {
   role={role}
 />
 
+
         </div>
       </Card>
     </div>
@@ -1059,4 +1063,3 @@ const CalendarSection = ({ role, userId }) => {
 };
 
 export default CalendarSection;
-
