@@ -565,7 +565,7 @@ const GSTBill = () => {
          {/* Bottom Footer Section */}
          <div className=" border-t-2 border-black">
             {/* Computer Generated Note */}
-            <div className="h-8  flex items-center justify-center">
+            <div className="  flex items-center justify-center">
               This is a Computer Generated Invoice
             </div>
 
