@@ -662,21 +662,22 @@ const CalendarSection = ({ role, userId }) => {
         </div>
 
         {/* Filters are hidden on mobile unless the menu is toggled */}
+        
         <div
           className={`md:flex mb-4 space-x-2 ${
             showFilters ? "block" : "hidden"
           } md:block`}
         >
           {/* Search Input */}
-          <Input
+          {/* <Input
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="mb-2 md:mb-0"
-          />
+          /> */}
 
           {/* Category Filter */}
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
+          {/* <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger>
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
@@ -687,10 +688,10 @@ const CalendarSection = ({ role, userId }) => {
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select>
+          </Select> */}
 
           {/* Client Name Filter - Replaced Popover with Select */}
-          <Select
+          {/* <Select
             value={filterClientName || "all"}
             onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
           >
@@ -710,10 +711,10 @@ const CalendarSection = ({ role, userId }) => {
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select>
+          </Select> */}
 
           {/* Assign To Filter - New Select Box */}
-          {role === "admin" && (
+          {/* {role === "admin" && (
           <Select
             value={filterAssignedUser}
             onValueChange={(value) => setFilterAssignedUser(value)}
@@ -735,22 +736,23 @@ const CalendarSection = ({ role, userId }) => {
               ))}
             </SelectContent>
           </Select>
-          )}
+          )} */}
 
           {/* Download PDF Button */}
           {role === "admin" && (
             <div className="flex justify-end mb-4">
-              <Button
+              {/* <Button
                 onClick={() => setIsPrinting(true)}
                 className="flex items-center space-x-2"
                 type="button"
               >
                 <Printer className="h-5 w-5 text-white" />
                 <span>Print Calendar</span>
-              </Button>
+              </Button> */}
             </div>
           )}
         </div>
+
 
         {/* Conditionally Render the Dialog */}
         {isModalOpen && (
