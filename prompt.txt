@@ -1,0 +1,80 @@
+import { startOfDay, endOfDay } from 'date-fns';
+
+const fetchEvents = useCallback(async () => {
+  try {
+    const today = new Date();
+    const dayStart = startOfDay(today).toISOString();
+    const dayEnd = endOfDay(today).toISOString();
+
+    // Initialize the query to fetch events that start today
+    let query = supabase
+      .from("events")
+      .select("*")
+      .gte('start_time', dayStart)
+      .lte('start_time', dayEnd);
+
+    // If role is 'user', filter events assigned to the current user
+    if (role === "user") {
+      query = query.contains('assigned_user_ids', [userId]);
+    }
+
+    // Remove other filters to focus only on today's events
+    // If you want to keep some filters, reintroduce them here carefully
+
+    const { data: allEvents, error: baseError } = await query;
+    if (baseError) throw baseError;
+
+    console.log("Fetched Events for Today:", allEvents);
+
+    // Process the fetched events
+    const filteredEvents = allEvents.map(event => {
+      let assignedIds = [];
+      if (Array.isArray(event.assigned_user_ids)) {
+        assignedIds = event.assigned_user_ids;
+      } else if (typeof event.assigned_user_ids === 'string') {
+        try {
+          assignedIds = JSON.parse(event.assigned_user_ids);
+        } catch {
+          assignedIds = [];
+        }
+      }
+      return { ...event, assigned_user_ids: assignedIds };
+    });
+
+    console.log("Filtered Events:", filteredEvents);
+
+    const formattedEvents = filteredEvents.map((event) => {
+      const startDate = new Date(event.start_time);
+      const endDate = new Date(event.end_time);
+
+      return {
+        id: event.id,
+        uniqueKey: `${event.id}-${event.title}`,
+        title: event.title || 'No Title',
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        allDay: event.all_day || false,
+        backgroundColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
+        borderColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
+        extendedProps: {
+          description: event.description || '',
+          location: event.location || '',
+          category: event.category || 'unknown',
+          isDone: event.is_done || false,
+          clientName: event.client_name || 'N/A',
+          assignedUserIds: event.assigned_user_ids || [],
+        },
+      };
+    }).filter(event => event !== null);
+
+    console.log("Formatted Events:", formattedEvents);
+
+    setEvents(formattedEvents);
+  } catch (error) {
+    console.error("Error fetching today's events:", error);
+    toast.error("Failed to fetch today's events. Please try again.");
+  }
+}, [role, userId]);
+,
+this fuction fetch all the events for today correctly, is this because of the Removal of Other Filters , but this functionality is needed in my app as search and filters help the users.so de we need to filter and seperate or is there any other best way
+
