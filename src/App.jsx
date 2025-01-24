@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+// App.jsx
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import Login from './Login';
 import Home from './Home';
 import AdminHome from './AdminHome';  // Import the AdminHome component
 import ProtectedRoute from './ProtectedRoute';
 import Unauthorized from './Unauthorized';
-import { Loader } from 'lucide-react';
+import { Loader } from "lucide-react";
 
 function App() {
   const [role, setRole] = useState(null);
@@ -18,7 +19,7 @@ function App() {
     const savedUserId = localStorage.getItem('userId');
     if (savedRole && savedUserId) {
       setRole(savedRole);
-      setUserId(Number(savedUserId));
+      setUserId(savedUserId); // Ensure userId is stored as string
       setIsAuthenticated(true);
     }
     setLoading(false);

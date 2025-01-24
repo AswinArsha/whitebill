@@ -1,3 +1,4 @@
+// Login.jsx
 import React, { useState } from "react";
 import { supabase } from "./supabase";
 import { Button } from "./components/ui/button";
@@ -101,7 +102,7 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
 
   const handleSuccessfulLogin = (user) => {
     setRole(user.role);
-    setUserId(user.id);
+    setUserId(user.id); // Ensure userId is stored as string
     setIsAuthenticated(true);
 
     if (rememberMe) {
@@ -194,7 +195,7 @@ const Login = ({ setRole, setIsAuthenticated, setUserId }) => {
               )}
             </div>
 
-      
+        
 
             {/* Submit Button */}
             <Button

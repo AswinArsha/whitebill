@@ -1,6 +1,18 @@
 // Client.jsx
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, ChevronRight, ChevronLeft, Plus, Check, X, MoreVertical } from 'lucide-react';
+import { Link } from "react-router-dom"; // Import Link for navigation
+import { 
+  Edit, 
+  Trash2, 
+  ChevronRight, 
+  ChevronLeft, 
+  Plus, 
+  Check, 
+  X, 
+  MoreVertical, 
+  ReceiptText, 
+  ClipboardCheck 
+} from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { supabase } from '../supabase';
 import {
@@ -54,11 +66,11 @@ const Client = ({ role, userId }) => {
     'Lead', 'Contacted', 'Proposal', 'Won', 'Lost'
   ]);
 
-  // New state for Delete Dialog
+  // State for Delete Dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
-  // New states for Detail Dialog
+  // State for Detail Dialog
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [clientDetails, setClientDetails] = useState(null);
 
@@ -139,6 +151,7 @@ const Client = ({ role, userId }) => {
         });
       } else {
         toast.success('Client updated successfully! ✏️');
+        fetchClients();
       }
     } else {
       const { data, error } = await supabase
@@ -176,12 +189,9 @@ const Client = ({ role, userId }) => {
         },
       });
     } else {
-      toast.success('Client deleted successfully! 🗑️', {
-        
-      });
+      toast.success('Client deleted successfully! 🗑️');
+      fetchClients();
     }
-
-    fetchClients();
   };
 
   const onDragEnd = async (result) => {
@@ -233,9 +243,7 @@ const Client = ({ role, userId }) => {
         });
       } else {
         // Show the client name in the success message
-        toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`, {
-        
-        });
+        toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`);
       }
   
       // Update order in the database for both columns
@@ -398,10 +406,8 @@ const Client = ({ role, userId }) => {
                                     <div>
                                       <p className="font-semibold">{client.client_name}</p>
                                       <p className="text-xs text-gray-600">{client.name}</p>
-                                      {/* Optionally display GSTIN in the client card */}
-                                      {client.gstin && (
-                                        <p className="text-xs text-gray-600">GSTIN: {client.gstin}</p>
-                                      )}
+                                 
+                                    
                                     </div>
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
@@ -605,63 +611,97 @@ const Client = ({ role, userId }) => {
 
       {/* Client Detail Dialog */}
       {clientDetails && (
-    <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-    <DialogContent className="max-w-lg bg-white rounded-lg shadow-lg p-6">
-      <DialogHeader className="mb-2">
-        <DialogTitle className="text-xl font-semibold text-gray-700">Client Details</DialogTitle>
-      </DialogHeader>
-  
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 mb-6">
-        <div>
-          <Label className="text-sm text-gray-500">Client Name</Label>
-          <p className="font-medium text-gray-800">{clientDetails.client_name || ''}</p>
-        </div>
-        <div>
-          <Label className="text-sm text-gray-500">Name</Label>
-          <p className="font-medium text-gray-800">{clientDetails.name || ''}</p>
-        </div>
-        <div>
-          <Label className="text-sm text-gray-500">Company</Label>
-          <p className="font-medium text-gray-800">{clientDetails.company || ''}</p>
-        </div>
-        <div>
-          <Label className="text-sm text-gray-500">Phone</Label>
-          <p className="font-medium text-gray-800">{clientDetails.phone || ''}</p>
-        </div>
-        <div>
-          <Label className="text-sm text-gray-500">Location</Label>
-          <p className="font-medium text-gray-800">{clientDetails.location || ''}</p>
-        </div>
-        <div>
-          <Label className="text-sm text-gray-500">GSTIN</Label>
-          <p className="font-medium text-gray-800">{clientDetails.gstin || ''}</p>
-        </div>
-        <div className="md:col-span-2">
-          <Label className="text-sm text-gray-500">Remarks</Label>
-          <p className="font-medium text-gray-800 whitespace-pre-line">{clientDetails.remarks || ''}</p>
-        </div>
-      </div>
-  
-      <div className="mt-4 flex justify-end space-x-2 border-t pt-4">
-        <Button onClick={() => setIsDetailDialogOpen(false)} className="">
-          <span>Close</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setIsDetailDialogOpen(false);
-            setIsEditMode(true);
-            setSelectedClient(clientDetails);
-          }}
-          className="flex items-center space-x-1 text-gray-700 border-gray-300 hover:bg-gray-100"
-        >
-          <Edit className="h-4 w-4" />
-          <span>Edit</span>
-        </Button>
-      </div>
-    </DialogContent>
-  </Dialog>
-  
+        <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+          <DialogContent className="max-w-lg bg-white rounded-lg shadow-lg p-6">
+            <DialogHeader className="mb-2">
+              <DialogTitle className="text-xl font-semibold text-gray-700">Client Details</DialogTitle>
+            </DialogHeader>
+        
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 mb-6">
+              <div>
+                <Label className="text-sm text-gray-500">Client Name</Label>
+                <p className="font-medium text-gray-800">{clientDetails.client_name || ''}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Name</Label>
+                <p className="font-medium text-gray-800">{clientDetails.name || ''}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Company</Label>
+                <p className="font-medium text-gray-800">{clientDetails.company || ''}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Phone</Label>
+                <p className="font-medium text-gray-800">{clientDetails.phone || ''}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Location</Label>
+                <p className="font-medium text-gray-800">{clientDetails.location || ''}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">GSTIN</Label>
+                <p className="font-medium text-gray-800">{clientDetails.gstin || ''}</p>
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-sm text-gray-500">Remarks</Label>
+                <p className="font-medium text-gray-800 whitespace-pre-line">{clientDetails.remarks || ''}</p>
+              </div>
+            </div>
+        
+            <div className="mt-4 flex justify-end space-x-4 border-t pt-4">
+
+
+
+
+  <Button
+    asChild
+    variant="outline"
+    size="sm"
+    className="flex items-center justify-center px-4 py-2"
+  >
+    <Link to={`/home/clients/${clientDetails.id}/ledger`} className="flex items-center space-x-2">
+      <ReceiptText className="h-4 w-4" />
+      <span>Ledger</span>
+    </Link>
+  </Button>
+
+  <Button
+    variant="outline"
+    size="sm"
+    className="flex items-center justify-center px-4 py-2"
+    onClick={(e) => {
+      e.stopPropagation();
+      toast('Notes functionality coming soon!', { icon: '📝' });
+    }}
+  >
+    <ClipboardCheck className="h-4 w-4 mr-2" />
+    <span>Notes</span>
+  </Button>
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => {
+      setIsDetailDialogOpen(false);
+      setIsEditMode(true);
+      setSelectedClient(clientDetails);
+    }}
+    className="flex items-center justify-center px-4 py-2"
+  >
+    <Edit className="h-4 w-4 mr-2" />
+    <span>Edit</span>
+  </Button>
+  <Button
+    onClick={() => setIsDetailDialogOpen(false)}
+    variant="outline"
+    size="sm"
+    className="flex items-center justify-center px-4 py-2"
+  >
+    <span>Close</span>
+  </Button>
+</div>
+
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

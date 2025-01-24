@@ -1,3 +1,5 @@
+// Home.jsx
+
 import React, { useState, useEffect } from "react";
 import { Link, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,6 +19,7 @@ import Billing from "./components/Billing";
 import CalendarSection from "./components/CalendarSection";
 import MonthlyExpenses from "./components/MonthlyExpenses/MonthlyExpenses";
 import Clients from "./components/Clients";
+import Ledger from "./components/Ledger"; // Import the Ledger component
 import Remainders from "./components/Remainders";
 import Attendance from "./components/Attendance";
 import IndividualAttendanceReport from "./components/IndividualAttendanceReport";
@@ -154,6 +157,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
     "/home/billing": "Billing",
     "/home/monthly-expenses": "Expenses & Income",
     "/home/clients": "Clients",
+    "/home/clients/:clientId/ledger": "Ledger",
     "/home/remainders": "Remainders",
     "/home/attendance": "Attendance",
     "/home/tasks": "Task Manager",
@@ -161,12 +165,19 @@ const Home = ({ role, userId, isAuthenticated }) => {
 
   const getCurrentSection = () => {
     const path = location.pathname;
-    return routeNameMap[path] || "";
+    // Find the matching route name
+    for (const route in routeNameMap) {
+      const regex = new RegExp(`^${route.replace(/:\w+/g, '\\w+')}$`);
+      if (regex.test(path)) {
+        return routeNameMap[route];
+      }
+    }
+    return "";
   };
 
   const navItems = [
     { path: "calendar", icon: <CalendarIcon className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Calendar" },
-    ...(role === "admin"
+    ...(role === "admin" || role === "superadmin"
       ? [
           { path: "billing", icon: <ReceiptText className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Billing" },
           { path: "monthly-expenses", icon: <ReceiptIndianRupee className="w-6 h-6 -ml-1 flex-shrink-0" />, label: "Expenses" },
@@ -225,7 +236,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
                 asChild
                 variant="ghost"
                 className={`w-full mt-14 justify-start ${
-                  location.pathname === `/home/${item.path}` ? "bg-gray-200" : "hover:bg-gray-100"
+                  location.pathname === `/home/${item.path}` || location.pathname.startsWith(`/home/${item.path}/`) ? "bg-gray-200" : "hover:bg-gray-100"
                 }`}
                 onClick={() => handleIconClick(item.path)}
               >
@@ -264,7 +275,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
           <Route path="billing" element={<Billing role={role} userId={userId} />} />
           <Route path="calendar" element={<CalendarSection role={role} userId={userId} />} />
           <Route path="monthly-expenses" element={<MonthlyExpenses role={role} userId={userId} />} />
-          <Route path="clients" element={<Clients role={role} userId={userId} />} />
+          <Route path="clients/*" element={<Clients role={role} userId={userId} />} />
           <Route path="remainders" element={<Remainders role={role} userId={userId} />} />
           <Route path="attendance/*" element={<Attendance role={role} userId={userId} />} />
           <Route path="attendance/:id" element={<IndividualAttendanceReport role={role} userId={userId} />} />
@@ -272,6 +283,8 @@ const Home = ({ role, userId, isAuthenticated }) => {
             path="tasks"
             element={<TaskSection role={role} userId={userId} onTasksRead={fetchUnreadTaskCount} />}
           />
+          {/* Ledger Route */}
+          <Route path="clients/:clientId/ledger" element={<Ledger role={role} userId={userId} />} />
           <Route index element={<Navigate to="calendar" />} />
         </Routes>
       </div>
