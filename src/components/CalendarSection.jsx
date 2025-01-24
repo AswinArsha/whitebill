@@ -140,7 +140,7 @@ const CalendarSection = ({ role, userId }) => {
       const { data: allEvents, error: baseError } = await query;
       if (baseError) throw baseError;
 
-      console.log("Fetched Events for Current Month:", allEvents);
+     
 
       // Process the fetched events
       const processedEvents = allEvents.map(event => {
@@ -157,7 +157,7 @@ const CalendarSection = ({ role, userId }) => {
         return { ...event, assigned_user_ids: assignedIds };
       });
 
-      console.log("Processed Events:", processedEvents);
+     
 
       const formattedEvents = processedEvents.map((event) => {
         const startDate = new Date(event.start_time);
@@ -183,7 +183,7 @@ const CalendarSection = ({ role, userId }) => {
         };
       }).filter(event => event !== null);
 
-      console.log("Formatted Events:", formattedEvents);
+     
 
       setEvents(formattedEvents);
     } catch (error) {
@@ -204,7 +204,7 @@ const CalendarSection = ({ role, userId }) => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events' },
         (payload) => {
-          console.log('Realtime change received!', payload);
+      
           fetchEvents(); // Re-fetch events on any change
         }
       )
@@ -591,42 +591,47 @@ const CalendarSection = ({ role, userId }) => {
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
       // Filter by category
-      if (filterCategory !== "all" && event.category !== filterCategory) {
+      if (filterCategory !== "all" && event.extendedProps.category !== filterCategory) {
         return false;
       }
-
+  
       // Filter by client name
-      if (filterClientName && event.clientName !== filterClientName) {
+      if (filterClientName && event.extendedProps.clientName !== filterClientName) {
         return false;
       }
-
+  
       // Filter by assigned user
-      if (filterAssignedUser !== "all" && 
-          !event.assignedUserIds.includes(Number(filterAssignedUser))) {
-        return false;
+      if (filterAssignedUser !== "all") {
+        // Ensure assignedUserIds is an array and convert to strings for comparison
+        const assignedUserIds = event.extendedProps.assignedUserIds || [];
+        const assignedUserStrings = assignedUserIds.map(id => id.toString());
+        
+        if (!assignedUserStrings.includes(filterAssignedUser)) {
+          return false;
+        }
       }
-
+  
       // Search by title (case-insensitive)
       if (searchTerm && 
           !event.title.toLowerCase().includes(searchTerm.toLowerCase())) {
         return false;
       }
-
+  
       return true;
     });
   }, [events, filterCategory, filterClientName, filterAssignedUser, searchTerm]);
 
   useEffect(() => {
-    console.log("Filtered Events:", filteredEvents);
+  
   }, [filteredEvents]);
 
   useEffect(() => {
-    console.log("Current Month:", currentMonth);
+  
   }, [currentMonth]);
 
   useEffect(() => {
     events.forEach(event => {
-      console.log("Event:", event);
+     
     });
   }, [events]);
 
@@ -669,15 +674,15 @@ const CalendarSection = ({ role, userId }) => {
           } md:block`}
         >
           {/* Search Input */}
-          {/* <Input
+          <Input
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="mb-2 md:mb-0"
-          /> */}
+          />
 
           {/* Category Filter */}
-          {/* <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger>
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
@@ -688,10 +693,10 @@ const CalendarSection = ({ role, userId }) => {
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select> */}
+          </Select>
 
           {/* Client Name Filter - Replaced Popover with Select */}
-          {/* <Select
+          <Select
             value={filterClientName || "all"}
             onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
           >
@@ -711,10 +716,10 @@ const CalendarSection = ({ role, userId }) => {
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select> */}
+          </Select>
 
           {/* Assign To Filter - New Select Box */}
-          {/* {role === "admin" && (
+          {role === "admin" && (
           <Select
             value={filterAssignedUser}
             onValueChange={(value) => setFilterAssignedUser(value)}
@@ -736,7 +741,7 @@ const CalendarSection = ({ role, userId }) => {
               ))}
             </SelectContent>
           </Select>
-          )} */}
+          )}
 
           {/* Download PDF Button */}
           {role === "admin" && (

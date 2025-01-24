@@ -125,11 +125,11 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-72 transition-transform duration-200 ease-out mb-6 backdrop-blur-sm bg-white/90" 
+        className="w-72 px-6 transition-transform duration-200 ease-out mb-6 backdrop-blur-sm bg-white/90" 
         align="start"
       >
         <div className="flex justify-between items-center">
-          <h3 className="font-semibold ml-2">More Events</h3>
+          <h3 className="font-semibold ">More Events</h3>
           <Button 
             variant="ghost" 
             size="sm" 
@@ -139,7 +139,7 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <ScrollArea className="h-64 w-full p-2">
+        <ScrollArea className="h-64  w-full">
           {events.map((event) => (
             <EventItem
               key={event.id}
@@ -150,6 +150,7 @@ const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
               }}
               isDraggable={role === 'admin'}
               inPopover={true}
+              
             />
           ))}
         </ScrollArea>

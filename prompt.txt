@@ -1,80 +1,1677 @@
-import { startOfDay, endOfDay } from 'date-fns';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import CustomCalendar from "./CustomCalendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import MarkAsDone from "./MarkAsDone"; // Ensure the path is correct
 
-const fetchEvents = useCallback(async () => {
-  try {
-    const today = new Date();
-    const dayStart = startOfDay(today).toISOString();
-    const dayEnd = endOfDay(today).toISOString();
+import { supabase } from "../supabase";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Check, ChevronsUpDown, Menu, Trash2, Plus, Save, Printer } from "lucide-react";
+import toast, { Toaster } from 'react-hot-toast';
+import AlertNotification from "./AlertNotification";
+import jsPDF from "jspdf";
+import { startOfMonth, endOfMonth } from 'date-fns';
 
-    // Initialize the query to fetch events that start today
-    let query = supabase
-      .from("events")
-      .select("*")
-      .gte('start_time', dayStart)
-      .lte('start_time', dayEnd);
+const CATEGORIES = [
+  { value: "shoot", label: "Shoot" },
+  { value: "meeting", label: "Meeting" },
+  { value: "post", label: "Post" },
+  { value: "editing", label: "Editing" },
+  { value: "ad_campaign", label: "Ad Campaign" },
+  { value: "poster_design", label: "Poster Design" },
+  { value: "task", label: "Task" },
+];
 
-    // If role is 'user', filter events assigned to the current user
-    if (role === "user") {
-      query = query.contains('assigned_user_ids', [userId]);
+const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGORIES];
+
+const getCategoryColor = (category, isDone) => {
+  if (isDone) return "#4caf50"; // Green for done events
+  switch (category) {
+    case "shoot": return "#f06543";  
+    case "meeting": return "#0582ca";  
+    case "post": return "#f48c06"; 
+    case "editing": return "#9d4edd";  
+    case "ad_campaign": return "#ad2831";  
+    case "poster_design": return "#ffc300";  
+    case "task": return "#335c67";  
+    default: return "#6c757d";  
+  }
+};
+
+const CalendarSection = ({ role, userId }) => {
+  // State variables
+  const [events, setEvents] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    id: "",
+    title: "",
+    description: "",
+    start: "",
+    end: "",
+    location: "",
+    category: "",
+    allDay: false,
+    isDone: false,
+    clientName: "",
+    assignedUserIds: [],
+  });
+  const [mode, setMode] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterClientName, setFilterClientName] = useState("");
+  const [filterAssignedUser, setFilterAssignedUser] = useState("all");
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [errors, setErrors] = useState({ title: "", category: "" });
+  const [clients, setClients] = useState([]);
+  const [users, setUsers] = useState([]);
+  const calendarRef = useRef(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Fetch clients
+  const fetchClients = async () => {
+    const { data, error } = await supabase.from("clients").select("client_name").order("client_name");
+    if (error) console.error("Error fetching clients:", error);
+    else {
+      setClients(data.map((client) => ({ value: client.client_name, label: client.client_name })));
+    }
+  };
+
+  // Fetch users
+  const fetchUsers = async () => {
+    const { data, error } = await supabase.from("users").select("id, name").eq("show", true).order("name");
+    if (error) console.error("Error fetching users:", error);
+    else {
+      setUsers(data.map((user) => ({ value: user.id, label: user.name })));
+    }
+  };
+
+  useEffect(() => {
+    fetchClients();
+    fetchUsers();
+  }, [role]);
+
+  // Handler to update currentMonth state
+  const handleMonthChange = useCallback((newMonthStartDate) => {
+    setCurrentMonth(newMonthStartDate);
+  }, []);
+
+  // Fetch events based on the current month without applying additional filters
+  const fetchEvents = useCallback(async () => {
+    try {
+      const rangeStart = startOfMonth(currentMonth).toISOString();
+      const rangeEnd = endOfMonth(currentMonth).toISOString();
+
+      let query = supabase
+        .from("events")
+        .select("*")
+        .gte('start_time', rangeStart)
+        .lte('start_time', rangeEnd);
+
+      if (role === "user") {
+        query = query.contains('assigned_user_ids', [userId]);
+      }
+
+      const { data: allEvents, error: baseError } = await query;
+      if (baseError) throw baseError;
+
+     
+
+      // Process the fetched events
+      const processedEvents = allEvents.map(event => {
+        let assignedIds = [];
+        if (Array.isArray(event.assigned_user_ids)) {
+          assignedIds = event.assigned_user_ids;
+        } else if (typeof event.assigned_user_ids === 'string') {
+          try {
+            assignedIds = JSON.parse(event.assigned_user_ids);
+          } catch {
+            assignedIds = [];
+          }
+        }
+        return { ...event, assigned_user_ids: assignedIds };
+      });
+
+     
+
+      const formattedEvents = processedEvents.map((event) => {
+        const startDate = new Date(event.start_time);
+        const endDate = new Date(event.end_time);
+
+        return {
+          id: event.id,
+          uniqueKey: `${event.id}-${event.title}`,
+          title: event.title || 'No Title',
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          allDay: event.all_day || false,
+          backgroundColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
+          borderColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
+          extendedProps: {
+            description: event.description || '',
+            location: event.location || '',
+            category: event.category || 'unknown',
+            isDone: event.is_done || false,
+            clientName: event.client_name || 'N/A',
+            assignedUserIds: event.assigned_user_ids || [],
+          },
+        };
+      }).filter(event => event !== null);
+
+     
+
+      setEvents(formattedEvents);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      toast.error("Failed to fetch events. Please try again.");
+    }
+  }, [role, userId, currentMonth]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents, currentMonth]);
+
+  // Realtime subscription to listen for changes in the events table
+  useEffect(() => {
+    const channel = supabase
+      .channel('custom-all-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        (payload) => {
+      
+          fetchEvents(); // Re-fetch events on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchEvents]);
+
+  // Handle opening the dialog for adding an event
+  const handleDateSelect = (selectInfo) => {
+    if (role !== "admin") return;
+    setMode("add");
+    setNewEvent({
+      id: "",
+      title: "",
+      description: "",
+      start: selectInfo.startStr,
+      end: selectInfo.endStr || selectInfo.startStr,
+      location: "",
+      category: "",
+      allDay: selectInfo.allDay,
+      isDone: false,
+      clientName: "",
+      assignedUserIds: [], // Initialize as empty array
+    });
+    setIsModalOpen(true);
+  };
+
+  // Handle opening the dialog for editing/viewing an event
+  const handleEventClick = ({ event }) => {
+    if (role === "admin") {
+      setMode("edit");
+    } else {
+      setMode("view");
+    }
+    setNewEvent({
+      id: event.id,
+      title: event.title,
+      description: event.extendedProps.description,
+      start: event.start,                           // Use event.start
+      end: event.end || event.start,                // Use event.end or fallback
+      location: event.extendedProps.location,
+      category: event.extendedProps.category,
+      allDay: event.allDay,
+      isDone: event.extendedProps.isDone,
+      clientName: event.extendedProps.clientName,
+      assignedUserIds: event.extendedProps.assignedUserIds || [],
+    });
+    setIsModalOpen(true);
+  };
+
+  // Validation and event handlers remain unchanged
+  const validateEvent = () => {
+    let isValid = true;
+    const newErrors = { title: "", category: "" };
+  
+    if (mode !== 'view') { // Skip validation in 'view' mode
+      if (!newEvent.title) {
+        newErrors.title = "Event title is required.";
+        isValid = false;
+      }
+  
+      if (!newEvent.category) {
+        newErrors.category = "Event category is required.";
+        isValid = false;
+      }
+    }
+  
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleEventAddOrUpdate = async () => {
+    // In 'view' mode, we only update the 'is_done' status
+    if (mode === 'view') {
+      const eventToSubmit = {
+        is_done: newEvent.isDone,
+      };
+
+      const { error } = await supabase
+        .from("events")
+        .update(eventToSubmit)
+        .eq("id", newEvent.id);
+
+      if (error) {
+        console.error("Error updating event status:", error);
+        toast.error("Failed to update event status. Please try again.");
+      } else {
+        setEvents((currentEvents) =>
+          currentEvents.map((event) =>
+            event.id === newEvent.id
+              ? {
+                  ...event,
+                  isDone: newEvent.isDone,
+                  backgroundColor: getCategoryColor(
+                    event.extendedProps.category,
+                    newEvent.isDone
+                  ),
+                  borderColor: getCategoryColor(
+                    event.extendedProps.category,
+                    newEvent.isDone
+                  ),
+                  extendedProps: {
+                    ...event.extendedProps,
+                    isDone: newEvent.isDone,
+                  },
+                }
+              : event
+          )
+        );
+        setIsModalOpen(false);
+        toast.success(
+          newEvent.isDone 
+            ? "Task completed successfully! 🎉" 
+            : "Task marked as incomplete.", 
+          { duration: 3000 }
+        );
+        
+      }
+      return; // Exit the function after handling 'view' mode
     }
 
-    // Remove other filters to focus only on today's events
-    // If you want to keep some filters, reintroduce them here carefully
+    // Existing logic for 'edit' and 'add' modes
+    if (validateEvent()) {
+      const eventToSubmit = {
+        title: newEvent.title,
+        description: newEvent.description,
+        start_time: newEvent.allDay
+          ? `${newEvent.start}T00:00:00Z`
+          : newEvent.start,
+        end_time: newEvent.allDay
+          ? `${newEvent.end}T23:59:59Z`
+          : newEvent.end,
+        location: newEvent.location,
+        category: newEvent.category,
+        all_day: newEvent.allDay,
+        is_done: newEvent.isDone, // This value is now updated correctly
+        client_name: newEvent.clientName,
+        assigned_user_ids: newEvent.assignedUserIds, // Include assignedUserIds
+      };
 
-    const { data: allEvents, error: baseError } = await query;
-    if (baseError) throw baseError;
+      if (mode === 'edit' && role === "admin") {
+        const { error } = await supabase
+          .from("events")
+          .update(eventToSubmit)
+          .eq("id", newEvent.id);
 
-    console.log("Fetched Events for Today:", allEvents);
+        if (error) {
+          console.error("Error updating event:", error);
+          toast.error("Failed to update event. Please try again.");
+        } else {
+          // Update the local state immediately
+          setEvents((currentEvents) =>
+            currentEvents.map((event) =>
+              event.id === newEvent.id
+                ? {
+                    ...event,
+                    ...eventToSubmit,
+                    backgroundColor: getCategoryColor(
+                      eventToSubmit.category,
+                      eventToSubmit.is_done
+                    ),
+                    borderColor: getCategoryColor(
+                      eventToSubmit.category,
+                      eventToSubmit.is_done
+                    ),
+                    extendedProps: {
+                      ...event.extendedProps,
+                      isDone: eventToSubmit.is_done, // Update the isDone property locally
+                      category: eventToSubmit.category,
+                      assignedUserIds: eventToSubmit.assigned_user_ids, // Update assignedUserIds
+                    },
+                  }
+                : event
+            )
+          );
+          setIsModalOpen(false);
+          toast.success('Event updated successfully! ✏️', {
+            duration: 3000,
+          });
+        }
+      } else if (mode === 'add' && role === "admin") {
+        const { data, error } = await supabase
+          .from("events")
+          .insert([eventToSubmit])
+          .select();
 
-    // Process the fetched events
-    const filteredEvents = allEvents.map(event => {
-      let assignedIds = [];
-      if (Array.isArray(event.assigned_user_ids)) {
-        assignedIds = event.assigned_user_ids;
-      } else if (typeof event.assigned_user_ids === 'string') {
-        try {
-          assignedIds = JSON.parse(event.assigned_user_ids);
-        } catch {
-          assignedIds = [];
+        if (error) {
+          console.error("Error adding event:", error);
+          toast.error("Failed to add event. Please try again.");
+        } else {
+          const newFormattedEvent = {
+            id: data[0].id,
+            title: data[0].title,
+            start: data[0].start_time,
+            end: data[0].end_time,
+            allDay: data[0].all_day,
+            backgroundColor: getCategoryColor(data[0].category, data[0].is_done),
+            borderColor: getCategoryColor(data[0].category, data[0].is_done),
+            extendedProps: {
+              description: data[0].description,
+              location: data[0].location,
+              category: data[0].category,
+              isDone: data[0].is_done,
+              clientName: data[0].client_name,
+              assignedUserIds: data[0].assigned_user_ids,
+            },
+          };
+          setEvents((currentEvents) => [...currentEvents, newFormattedEvent]);
+          setIsModalOpen(false);
+          toast.success('Event added successfully! 🎉', {
+            duration: 3000,
+          });
         }
       }
-      return { ...event, assigned_user_ids: assignedIds };
+    }
+  };
+
+  // Handle Event Deletion (unchanged)
+  const handleEventDelete = async () => {
+    if (mode === 'edit' && role === "admin") {
+      const { error } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", newEvent.id);
+  
+      if (error) {
+        console.error("Error deleting event:", error);
+        toast.error("Failed to delete event. Please try again.");
+      } else {
+        setEvents((currentEvents) =>
+          currentEvents.filter((event) => event.id !== newEvent.id)
+        );
+        setIsModalOpen(false);
+        toast.success('Event deleted successfully! 🗑️ ', {
+          duration: 3000,
+          
+        });
+        
+      }
+    }
+  };
+
+  // Handle Event Drop (unchanged)
+  const handleEventDrop = async (dropInfo) => {
+    if (role !== "admin") return;
+    
+    const updatedEvent = {
+      start_time: dropInfo.event.start,
+      end_time: dropInfo.event.end,
+      all_day: dropInfo.event.allDay
+    };
+  
+    const { error } = await supabase
+      .from("events")
+      .update(updatedEvent)
+      .eq("id", dropInfo.event.id);
+  
+    if (error) {
+      console.error("Error updating event timing:", error);
+      toast.error("Failed to update event timing. Please try again.");
+    } else {
+      setEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event.id === dropInfo.event.id
+            ? {
+                ...event,
+                start: updatedEvent.start_time,
+                end: updatedEvent.end_time,
+                allDay: updatedEvent.all_day,
+                backgroundColor: getCategoryColor(
+                  event.extendedProps.category,
+                  event.extendedProps.isDone
+                ),
+                borderColor: getCategoryColor(
+                  event.extendedProps.category,
+                  event.extendedProps.isDone
+                ),
+              }
+            : event
+        )
+      );
+      toast.success('Event moved successfully! 📅', {
+        duration: 3000,
+      });
+    }
+  };
+
+  // Handle Event Resize (unchanged)
+  const handleEventResize = async (resizeInfo) => {
+    if (role !== "admin") return; // Only admins can resize events
+    const updatedEvent = {
+      id: resizeInfo.event.id,
+      start_time: resizeInfo.event.allDay
+        ? `${resizeInfo.event.startStr}T00:00:00Z`
+        : resizeInfo.event.startStr,
+      end_time: resizeInfo.event.allDay
+        ? `${resizeInfo.event.endStr || resizeInfo.event.startStr}T23:59:59Z`
+        : resizeInfo.event.endStr || resizeInfo.event.startStr,
+      all_day: resizeInfo.event.allDay,
+    };
+  
+    const { error } = await supabase
+      .from("events")
+      .update(updatedEvent)
+      .eq("id", updatedEvent.id);
+  
+    if (error) {
+      console.error("Error updating event resizing:", error);
+      alert("Failed to resize event. Please try again.");
+    } else {
+      setEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event.id === updatedEvent.id
+            ? {
+                ...event,
+                start: updatedEvent.start_time,
+                end: updatedEvent.end_time,
+                allDay: updatedEvent.all_day,
+                backgroundColor: getCategoryColor(
+                  event.extendedProps.category,
+                  event.extendedProps.isDone
+                ),
+                borderColor: getCategoryColor(
+                  event.extendedProps.category,
+                  event.extendedProps.isDone
+                ),
+                extendedProps: {
+                  ...event.extendedProps,
+                  start_time: updatedEvent.start_time,
+                  end_time: updatedEvent.end_time,
+                },
+              }
+            : event
+        )
+      );
+    }
+  };
+
+  // PDF Generation (unchanged)
+  const generateEnhancedCalendarPDF = () => {
+    // ... existing PDF generation code
+    // You may want to include assigned users in the PDF if needed
+  };
+
+  const triggerPrint = useCallback(() => {
+    generateEnhancedCalendarPDF();
+  }, [filterClientName, events, currentMonth]);
+
+  const handleMonthChangeLocal = (arg) => {
+    setCurrentMonth(arg.view.currentStart);
+  };
+
+  useEffect(() => {
+    if (isPrinting) {
+      triggerPrint();
+      setIsPrinting(false);
+    }
+  }, [isPrinting, triggerPrint]);
+
+  // Centralized function to close the dialog and reset state
+  const handleCloseDialog = () => {
+    setIsModalOpen(false);
+    setMode(null);
+    setNewEvent({
+      id: "",
+      title: "",
+      description: "",
+      start: "",
+      end: "",
+      location: "",
+      category: "",
+      allDay: false,
+      isDone: false,
+      clientName: "",
+      assignedUserIds: [], // Reset assignedUserIds
     });
+    setErrors({ title: "", category: "" });
+  };
 
-    console.log("Filtered Events:", filteredEvents);
+  // Client-side Filtering
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+      // Filter by category
+      if (filterCategory !== "all" && event.category !== filterCategory) {
+        return false;
+      }
 
-    const formattedEvents = filteredEvents.map((event) => {
-      const startDate = new Date(event.start_time);
-      const endDate = new Date(event.end_time);
+      // Filter by client name
+      if (filterClientName && event.clientName !== filterClientName) {
+        return false;
+      }
 
-      return {
-        id: event.id,
-        uniqueKey: `${event.id}-${event.title}`,
-        title: event.title || 'No Title',
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-        allDay: event.all_day || false,
-        backgroundColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
-        borderColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
-        extendedProps: {
-          description: event.description || '',
-          location: event.location || '',
-          category: event.category || 'unknown',
-          isDone: event.is_done || false,
-          clientName: event.client_name || 'N/A',
-          assignedUserIds: event.assigned_user_ids || [],
-        },
-      };
-    }).filter(event => event !== null);
+      // Filter by assigned user
+      if (filterAssignedUser !== "all" && 
+          !event.assignedUserIds.includes(Number(filterAssignedUser))) {
+        return false;
+      }
 
-    console.log("Formatted Events:", formattedEvents);
+      // Search by title (case-insensitive)
+      if (searchTerm && 
+          !event.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
 
-    setEvents(formattedEvents);
-  } catch (error) {
-    console.error("Error fetching today's events:", error);
-    toast.error("Failed to fetch today's events. Please try again.");
-  }
-}, [role, userId]);
+      return true;
+    });
+  }, [events, filterCategory, filterClientName, filterAssignedUser, searchTerm]);
+
+  useEffect(() => {
+  
+  }, [filteredEvents]);
+
+  useEffect(() => {
+  
+  }, [currentMonth]);
+
+  useEffect(() => {
+    events.forEach(event => {
+     
+    });
+  }, [events]);
+
+  return (
+    <div>
+      <Toaster position="bottom-center" reverseOrder={false} />
+      {/* Custom CSS for FullCalendar popover */}
+      <style jsx>{`
+        .fc-popover {
+          z-index: 1000 !important; /* Set the z-index lower than the dialog's */
+        }
+      `}</style>
+
+      {/* Header */}
+      <div className="flex justify-between items-center ">
+        <div className="flex space-x-5 mb-4">
+          <div>
+            {/* Additional header content if needed */}
+          </div>
+          <AlertNotification />
+        </div>
+      </div>
+      <Card className="bg-gray-50 p-4">
+        {/* Mobile: Show a hamburger menu to toggle the filter */}
+        <div className="md:hidden mb-4">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            type="button"
+          >
+            <Menu className="w-6 h-6" />
+          </Button>
+        </div>
+
+        {/* Filters are hidden on mobile unless the menu is toggled */}
+        
+        <div
+          className={`md:flex mb-4 space-x-2 ${
+            showFilters ? "block" : "hidden"
+          } md:block`}
+        >
+          {/* Search Input */}
+          <Input
+            placeholder="Search events..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="mb-2 md:mb-0"
+          />
+
+          {/* Category Filter */}
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTER_CATEGORIES.map((category) => (
+                <SelectItem key={category.value} value={category.value}>
+                  {category.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Client Name Filter - Replaced Popover with Select */}
+          <Select
+            value={filterClientName || "all"}
+            onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Clients" />
+            </SelectTrigger>
+            <SelectContent className="h-100 overflow-y-auto relative z-[1050]">
+              <SelectItem key="all" value="all">
+                All Clients
+              </SelectItem>
+              {clients.map((client) => (
+                <SelectItem
+                  key={client.value}
+                  value={client.value}
+                >
+                  {client.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Assign To Filter - New Select Box */}
+          {role === "admin" && (
+          <Select
+            value={filterAssignedUser}
+            onValueChange={(value) => setFilterAssignedUser(value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Assigned Users" />
+            </SelectTrigger>
+            <SelectContent className="max-h-80 overflow-y-auto relative z-[1050]">
+              <SelectItem key="all" value="all">
+                All Assigned Users
+              </SelectItem>
+              {users.filter(user => user.label.toLowerCase() !== 'admin').map((user) => (
+                <SelectItem
+                  key={user.value}
+                  value={user.value.toString()}
+                >
+                  {user.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          )}
+
+          {/* Download PDF Button */}
+          {role === "admin" && (
+            <div className="flex justify-end mb-4">
+              {/* <Button
+                onClick={() => setIsPrinting(true)}
+                className="flex items-center space-x-2"
+                type="button"
+              >
+                <Printer className="h-5 w-5 text-white" />
+                <span>Print Calendar</span>
+              </Button> */}
+            </div>
+          )}
+        </div>
+
+
+        {/* Conditionally Render the Dialog */}
+        {isModalOpen && (
+          <Dialog open={isModalOpen} onOpenChange={(open) => {
+            if (!open) {
+              handleCloseDialog();
+            }
+          }}>
+            <DialogContent className="z-[1001] w-full sm:max-w-3xl p-4 sm:p-6 bg-white rounded-lg shadow-lg">
+              <DialogHeader>
+                <DialogTitle className="text-xl  sm:text-2xl font-semibold mb-2">
+                  {mode === "edit"
+                    ? "Edit Event"
+                    : mode === "add"
+                    ? "Add New Event"
+                    : "View Event"}
+                </DialogTitle>
+                <DialogDescription className="text-gray-600 text-sm sm:text-base">
+                  {mode === "edit"
+                    ? "Update the details of the event."
+                    : mode === "add"
+                    ? "Fill in the details of the new event."
+                    : "View the details of the event and mark it as done."}
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Dialog Form */}
+              <div className="space-y-4 sm:space-y-6">
+                {/* Event Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Event Title */}
+                  <div>
+                    <Label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                      Event Title
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="title"
+                        value={newEvent.title}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Input
+                        id="title"
+                        value={newEvent.title}
+                        onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                        required
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                    {errors.title && (
+                      <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+                    )}
+                  </div>
+
+                  {/* Client Name */}
+                  <div>
+                    <Label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
+                      Client Name
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="clientName"
+                        value={newEvent.clientName}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.clientName || "all"}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, clientName: value === "all" ? "" : value })
+                        }
+                        required
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a client" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+                          <SelectItem key="all" value="all">
+                            All Clients
+                          </SelectItem>
+                          {clients.map((client) => (
+                            <SelectItem key={client.value} value={client.value}>
+                              {client.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Category and Assign To */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Category */}
+                  <div>
+                    <Label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                      Category
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="category"
+                        value={newEvent.category}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.category}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, category: value })
+                        }
+                        required
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+                          {CATEGORIES.map((category) => (
+                            <SelectItem key={category.value} value={category.value}>
+                              {category.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {errors.category && (
+                      <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+                    )}
+                  </div>
+
+                  {/* Assign To */}
+                  <div>
+                    <Label htmlFor="assignedUser" className="block text-sm font-medium text-gray-700">
+                      Assign To
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="assignedUser"
+                        value={
+                          users
+                            .filter(user => newEvent.assignedUserIds.includes(user.value))
+                            .map(user => user.label)
+                            .join(", ")
+                        }
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Select
+                        value={newEvent.assignedUserIds.length > 0 ? newEvent.assignedUserIds[0].toString() : ""}
+                        onValueChange={(value) =>
+                          setNewEvent({ ...newEvent, assignedUserIds: value ? [Number(value)] : [] })
+                        }
+                        className="mt-1"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a user" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+                          {users.filter(user => user.label.toLowerCase() !== 'admin').map((user) => (
+                            <SelectItem key={user.value} value={user.value.toString()}>
+                              {user.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remarks and Location */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Remarks */}
+                  <div>
+                    <Label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                      Remarks
+                    </Label>
+                    {mode === "view" ? (
+                      <Textarea
+                        id="description"
+                        value={newEvent.description}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Textarea
+                        id="description"
+                        value={newEvent.description}
+                        onChange={(e) =>
+                          setNewEvent({
+                            ...newEvent,
+                            description: e.target.value,
+                          })
+                        }
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <Label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                      Location
+                    </Label>
+                    {mode === "view" ? (
+                      <Input
+                        id="location"
+                        value={newEvent.location}
+                        readOnly
+                        className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
+                      />
+                    ) : (
+                      <Input
+                        id="location"
+                        value={newEvent.location}
+                        onChange={(e) =>
+                          setNewEvent({
+                            ...newEvent,
+                            location: e.target.value,
+                          })
+                        }
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Mark as Done */}
+                <MarkAsDone
+                  isDone={newEvent.isDone}
+                  eventId={newEvent.id}
+                  setEvents={setEvents}
+                  onMarkDone={() =>
+                    setNewEvent((prevEvent) => ({ ...prevEvent, isDone: !prevEvent.isDone }))
+                  }
+                />
+              </div>
+
+              {/* Dialog Footer */}
+              <DialogFooter className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
+                {mode === "edit" && role === "admin" && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleEventDelete}
+                    className="flex items-center space-x-2 w-full sm:w-auto"
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4 text-white" aria-hidden="true" />
+                    <span>Delete</span>
+                  </Button>
+                )}
+                <Button
+                  onClick={handleEventAddOrUpdate}
+                  className="flex items-center space-x-2 w-full sm:w-auto"
+                  type="button"
+                >
+                  {mode === "edit" ? (
+                    <>
+                      <Save className="h-4 w-4 text-white" aria-hidden="true" />
+                      <span>Update Event</span>
+                    </>
+                  ) : mode === "add" ? (
+                    <>
+                      <Plus className="h-4 w-4 text-white" aria-hidden="true" />
+                      <span>Add Event</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 text-white" aria-hidden="true" />
+                      <span>Update Event</span>
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Temporary Event List for Debugging */}
+        {/* <div className="mt-6 p-4 bg-white shadow rounded">
+          <h2 className="text-lg font-semibold mb-2">Today's Events</h2>
+          {filteredEvents.length > 0 ? (
+            <ul>
+              {filteredEvents.map(event => (
+                <li key={event.id} className="mb-2 p-2 border rounded">
+                  <span className="font-medium">{event.title}</span> - {new Date(event.start).toLocaleTimeString()} to {new Date(event.end).toLocaleTimeString()}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No events scheduled for today.</p>
+          )}
+        </div> */}
+
+        {/* Calendar Component */}
+        <div className="bg-white shadow-none ">
+          <CustomCalendar
+            events={filteredEvents} // Pass filteredEvents
+            onEventClick={handleEventClick}
+            onDateSelect={handleDateSelect}
+            onEventDrop={handleEventDrop}
+            role={role}
+            currentMonth={currentMonth} // Pass currentMonth for dynamic fetching
+            onMonthChange={handleMonthChange} // Pass the handler
+          />
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+export default CalendarSection;
 ,
-this fuction fetch all the events for today correctly, is this because of the Removal of Other Filters , but this functionality is needed in my app as search and filters help the users.so de we need to filter and seperate or is there any other best way
 
+
+import React, { useState, useEffect, useCallback , useRef } from 'react';
+import { ChevronLeft, ChevronRight, CalendarIcon, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useDroppable,
+  useDraggable
+} from '@dnd-kit/core';
+import { restrictToWindowEdges } from '@dnd-kit/modifiers';
+import { 
+  format, addDays, startOfWeek, endOfWeek, 
+  startOfDay, endOfDay, isWithinInterval, isSameDay,
+  isWeekend, parseISO, startOfMonth
+} from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Helper function to format dates to UTC strings
+const formatToUTCString = (date, isEndTime = false) => {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isEndTime) {
+    d.setHours(23, 59, 59, 999);
+  } else {
+    d.setHours(0, 0, 0, 0);
+  }
+  return d.toISOString();
+};
+
+const EventItem = ({ event, onClick, isDraggable = false, inPopover = false }) => {
+  const { attributes, listeners, setNodeRef, isDragging, active } = useDraggable({
+    id: event.id,
+    data: { event, type: 'event' },
+    disabled: !isDraggable
+  });
+
+  // If this item is being dragged, render an invisible placeholder
+  if (isDragging && active?.id === event.id) {
+    return (
+      <div 
+        ref={setNodeRef}
+        className="opacity-0 invisible h-6"
+        {...attributes}
+        {...listeners}
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "text-xs text-white font-medium p-1 rounded shadow-sm group relative",
+        "transition-all duration-200 ease-in-out",
+        "hover:opacity-90 hover:scale-105 hover:shadow-md",
+        isDraggable && "hover:pl-6",
+        inPopover ? "mb-2 last:mb-0" : ""
+      )}
+      style={{ 
+        backgroundColor: event.backgroundColor,
+        pointerEvents: isDragging ? 'none' : 'auto'
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick({ event });
+      }}
+      {...attributes}
+      title={event.title}
+    >
+      {isDraggable && (
+        <div 
+          className={cn(
+            "absolute left-1 top-1/2 -translate-y-1/2 bg-white rounded-full h-3 w-3",
+            "opacity-0 group-hover:opacity-70 cursor-grab active:cursor-grabbing",
+            "transition-opacity duration-200 ease-in-out"
+          )}
+          {...listeners}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+        />
+      )}
+      <span className="cursor-default truncate block">{event.title}</span>
+    </div>
+  );
+};
+
+const MoreEventsPopover = ({ events, role, onEventClick, onClosePopover }) => {
+  const [open, setOpen] = useState(false);
+
+  const handleClose = (e) => {
+    e.stopPropagation(); // Prevent event from bubbling up
+    setOpen(false);
+    if (onClosePopover) onClosePopover();
+  };
+
+  return (
+    <Popover 
+      open={open} 
+      onOpenChange={(open) => {
+        setOpen(open);
+        if (!open && onClosePopover) onClosePopover();
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button 
+          type="button"
+          variant="ghost" 
+          className="text-xs text-gray-500 w-full h-6 p-1 transition-all duration-200 rounded-full hover:bg-gray-200 hover:scale-105"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          +{events.length} more
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent 
+        className="w-72 transition-transform duration-200 ease-out mb-6 backdrop-blur-sm bg-white/90" 
+        align="start"
+      >
+        <div className="flex justify-between items-center">
+          <h3 className="font-semibold ml-2">More Events</h3>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleClose}
+            className="hover:bg-gray-100"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <ScrollArea className="h-64 w-full p-2">
+          {events.map((event) => (
+            <EventItem
+              key={event.id}
+              event={event}
+              onClick={(e) => {
+                onEventClick(e);
+                setOpen(false);
+              }}
+              isDraggable={role === 'admin'}
+              inPopover={true}
+            />
+          ))}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const DayCell = ({ day, dayEvents, onDateClick, role, onEventClick, ignoreNextDateClick, onClosePopover }) => {
+  const isToday = isSameDay(new Date(), day.date);
+  const cellId = day.date.toISOString();
+  
+  const { setNodeRef, isOver } = useDroppable({
+    id: cellId,
+    data: { date: day.date, type: 'cell' }
+  });
+
+  const MAX_VISIBLE_EVENTS = 3;
+  const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
+  const hiddenEvents = dayEvents.slice(MAX_VISIBLE_EVENTS);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "min-h-32 p-2 border border-gray-300 transition-all duration-200 ease-in-out",
+        !day.isCurrentMonth && "bg-gray-50 text-gray-500",
+        day.isWeekend && "bg-gray-50",
+        isOver && " scale-102",
+        "hover:bg-blue-50",
+        "relative"
+      )}
+      onClick={() => {
+        if (!ignoreNextDateClick) {
+          onDateClick(day.date);
+        }
+      }}
+      role="gridcell"
+      aria-label={format(day.date, 'PPPP')}
+      tabIndex={0}
+    >
+      {/* Today indicator border - placed behind content */}
+      {isToday && (
+        <div className="absolute inset-0 border-2 border-blue-500 rounded-md -m-px pointer-events-none" />
+      )}
+      
+      {/* Cell content - always on top */}
+      <div className="relative z-10">
+        <div className={cn(
+          "flex items-center justify-between mb-1",
+          isToday && "text-blue-600 font-semibold"
+        )}>
+          <span className={cn(
+            "text-sm inline-flex items-center justify-center",
+            isToday && "bg-blue-500 text-white w-6 h-6 rounded-full"
+          )}>
+            {format(day.date, 'd')}
+          </span>
+          {isToday && (
+            <span className="text-xs text-blue-600 font-medium">
+              Today
+            </span>
+          )}
+        </div>
+        <div className={cn(
+          "space-y-1",
+          isToday && "bg-blue-50/30"
+        )}>
+          {visibleEvents.map((event) => (
+            <EventItem
+              key={event.id}
+              event={event}
+              onClick={onEventClick}
+              isDraggable={role === 'admin'}
+            />
+          ))}
+          {hiddenEvents.length > 0 && (
+            <MoreEventsPopover
+              events={hiddenEvents}
+              role={role}
+              onEventClick={onEventClick}
+              onClosePopover={onClosePopover}
+            />
+          )}
+        </div>
+      </div>
+      
+      {/* Drag overlay indicator */}
+      {isOver && (
+        <div className="absolute inset-0 border border-blue-500 rounded-lg pointer-events-none" />
+      )}
+    </div>
+  );
+};
+
+const DayView = ({ events, onEventClick, role }) => {
+  const sortedEvents = [...events].sort((a, b) => 
+    parseISO(a.start).getTime() - parseISO(b.start).getTime()
+  );
+
+  return (
+    <div className="p-4 space-y-4">
+      {sortedEvents.length > 0 ? (
+        sortedEvents.map(event => (
+          <motion.div
+            key={event.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+            onClick={() => onEventClick({ event })}
+          >
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-3 h-3 rounded-full flex-shrink-0" 
+                style={{ backgroundColor: event.backgroundColor }}
+              />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium truncate">{event.title}</h3>
+              
+              </div>
+            </div>
+          </motion.div>
+        ))
+      ) : (
+        <div className="text-center text-gray-500 py-8">
+          No events scheduled for today
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CustomCalendar = ({
+  events,
+  onEventClick,
+  onDateSelect,
+  onEventDrop,
+  role,
+  theme = {
+    headerBg: 'bg-white',
+    todayRing: 'ring-blue-500',
+    weekendBg: 'bg-gray-50',
+    hoverBg: 'hover:bg-blue-50'
+  },
+  currentMonth,
+  onMonthChange // Accept the callback prop
+}) => {
+  const [currentDate, setCurrentDate] = useState(currentMonth || new Date());
+  const [activeId, setActiveId] = useState(null);
+  const [view, setView] = useState('month');
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [ignoreNextDateClick, setIgnoreNextDateClick] = useState(false);
+  const [localEvents, setLocalEvents] = useState(events);
+  const [draggedEvent, setDraggedEvent] = useState(null);
+  const dragTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // Force re-render of events periodically to ensure visibility
+    const interval = setInterval(() => {
+      setLocalEvents(prev => [...prev]);
+    }, 1000);
+  
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setLocalEvents(events);
+  }, [events]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const navigateMonth = useCallback((direction) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      // Call the onMonthChange callback with the new month's start date
+      if (onMonthChange) {
+        onMonthChange(startOfMonth(newDate));
+      }
+      return newDate;
+    });
+  }, [onMonthChange]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      switch(e.key) {
+        case 'ArrowLeft':
+          navigateMonth(-1);
+          break;
+        case 'ArrowRight':
+          navigateMonth(1);
+          break;
+        case 't':
+        case 'T':
+          if (e.ctrlKey || e.metaKey) {
+            setCurrentDate(new Date());
+            if (onMonthChange) {
+              onMonthChange(startOfMonth(new Date()));
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigateMonth, onMonthChange]);
+
+  const getEventsForDate = useCallback((date) => {
+    // Set time to start of day in IST
+    const istDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    return localEvents.filter(event => {
+      const eventDate = new Date(event.start);
+      return (
+        istDate.getDate() === eventDate.getDate() &&
+        istDate.getMonth() === eventDate.getMonth() &&
+        istDate.getFullYear() === eventDate.getFullYear()
+      );
+    });
+  }, [localEvents]);
+  
+  const getCalendarDays = useCallback(() => {
+    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const start = startOfWeek(firstDayOfMonth);
+    const end = endOfWeek(lastDayOfMonth);
+    const days = [];
+    let day = new Date(start);
+    while (day <= end) {
+      days.push({
+        date: new Date(day),
+        isCurrentMonth: day.getMonth() === currentDate.getMonth(),
+        isWeekend: isWeekend(day)
+      });
+      day = addDays(day, 1);
+    }
+    return days;
+  }, [currentDate]);
+
+  const handleDateClick = (date) => {
+    if (role !== 'admin') return;
+    const startStr = formatToUTCString(date);
+    const endStr = formatToUTCString(date, true);
+    onDateSelect({ startStr, endStr, allDay: true });
+  };
+
+  const handleDragStart = (event) => {
+    if (role !== 'admin') return;
+    const eventData = localEvents.find(e => e.id === event.active.id);
+    setActiveId(event.active.id);
+    setDraggedEvent(eventData);
+  };
+
+  const handleDragEnd = async (event) => {
+    if (role !== 'admin') return;
+    const { active, over } = event;
+    
+    if (!over) {
+      // Clear dragged state after a short delay
+      dragTimeoutRef.current = setTimeout(() => {
+        setActiveId(null);
+        setDraggedEvent(null);
+      }, 50);
+      return;
+    }
+
+    const draggedEvent = localEvents.find(e => e.id === active.id);
+    const targetDate = new Date(over.id);
+
+    if (draggedEvent) {
+      const originalStart = new Date(draggedEvent.start);
+      const originalEnd = new Date(draggedEvent.end);
+      const timeDiff = originalEnd.getTime() - originalStart.getTime();
+
+      const newStart = startOfDay(targetDate);
+      if (!draggedEvent.allDay) {
+        newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0);
+      }
+      const newEnd = new Date(newStart.getTime() + timeDiff);
+
+      const updatedEvent = {
+        ...draggedEvent,
+        start: formatToUTCString(newStart),
+        end: formatToUTCString(newEnd, true),
+        allDay: draggedEvent.allDay
+      };
+
+      // Clear drag state first
+      setActiveId(null);
+      setDraggedEvent(null);
+
+      // Update local state
+      setLocalEvents(prev => 
+        prev.map(e => (e.id === draggedEvent.id ? updatedEvent : e))
+      );
+
+      try {
+        await onEventDrop({ event: updatedEvent });
+      } catch (error) {
+        console.error('Error updating event:', error);
+        setLocalEvents(prev =>
+          prev.map(e => (e.id === draggedEvent.id ? draggedEvent : e))
+        );
+      }
+    }
+  };
+
+  // Cleanup drag timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleClosePopover = () => {
+    setIgnoreNextDateClick(true);
+    setTimeout(() => setIgnoreNextDateClick(false), 300);
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      modifiers={[restrictToWindowEdges]}
+    >
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {/* Calendar Header */}
+        <div className={cn("p-4 flex flex-col md:flex-row justify-between items-center gap-4", theme.headerBg)}>
+          <div className="flex items-center space-x-4 w-full md:w-auto">
+            <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              className="flex-1 md:flex-none items-center space-x-2"
+              onClick={() => setIsDatePickerOpen(true)}
+            >
+              <CalendarIcon className="h-4 w-4 hidden md:inline" />
+              <span className="font-semibold">
+                {format(currentDate, 'MMMM yyyy')}
+              </span>
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex space-x-2 w-full md:w-auto justify-end">
+            <Button variant="secondary" onClick={() => {
+              setCurrentDate(new Date());
+              if (onMonthChange) {
+                onMonthChange(startOfMonth(new Date()));
+              }
+            }}>
+              Today
+            </Button>
+            <div className="flex space-x-2">
+              {['month', 'day'].map(mode => (
+                <Button
+                  key={mode}
+                  variant={view === mode ? 'default' : 'outline'}
+                  onClick={() => setView(mode)}
+                  className="text-sm"
+                >
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Calendar Grid */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${view}-${currentDate.toISOString()}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="border-t border-gray-200"
+          >
+            {view === 'month' ? (
+              <div className="w-full">
+                {/* Week day headers - only show on md and above */}
+                <div className="hidden md:grid md:grid-cols-7 w-full">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div 
+                      key={day} 
+                      className="p-2 text-center font-semibold bg-gray-100 text-sm border-b border-gray-200"
+                    >
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="md:grid md:grid-cols-7 flex flex-col">
+                  {getCalendarDays().map(day => (
+                    <DayCell
+                      key={day.date.toISOString()}
+                      day={day}
+                      dayEvents={getEventsForDate(day.date)}
+                      onDateClick={handleDateClick}
+                      onEventClick={onEventClick}
+                      role={role}
+                      ignoreNextDateClick={ignoreNextDateClick}
+                      onClosePopover={handleClosePopover}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <DayView 
+                events={getEventsForDate(currentDate)}
+                onEventClick={onEventClick}
+                role={role}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        <DragOverlay modifiers={[restrictToWindowEdges]}>
+          {draggedEvent && (
+            <div
+              className="text-xs p-2 rounded-lg shadow-xl bg-white border-2 pointer-events-none"
+              style={{ 
+                backgroundColor: draggedEvent.backgroundColor,
+                transform: 'scale(1.05)',
+                transition: 'transform 200ms cubic-bezier(0.18, 0.67, 0.6, 1.22)'
+              }}
+            >
+              <span className="font-medium">{draggedEvent.title}</span>
+            </div>
+          )}
+        </DragOverlay>
+      </div>
+    </DndContext>
+  );
+};
+
+export default CustomCalendar;
