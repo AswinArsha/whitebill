@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback , useRef } from 'react';
 import { ChevronLeft, ChevronRight, CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +20,7 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { 
   format, addDays, startOfWeek, endOfWeek, 
   startOfDay, endOfDay, isWithinInterval, isSameDay,
-  isWeekend, parseISO
+  isWeekend, parseISO, startOfMonth
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -295,9 +293,11 @@ const CustomCalendar = ({
     todayRing: 'ring-blue-500',
     weekendBg: 'bg-gray-50',
     hoverBg: 'hover:bg-blue-50'
-  }
+  },
+  currentMonth,
+  onMonthChange // Accept the callback prop
 }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(currentMonth || new Date());
   const [activeId, setActiveId] = useState(null);
   const [view, setView] = useState('month');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -314,7 +314,6 @@ const CustomCalendar = ({
   
     return () => clearInterval(interval);
   }, []);
-  
 
   useEffect(() => {
     setLocalEvents(events);
@@ -330,9 +329,13 @@ const CustomCalendar = ({
     setCurrentDate(prev => {
       const newDate = new Date(prev);
       newDate.setMonth(prev.getMonth() + direction);
+      // Call the onMonthChange callback with the new month's start date
+      if (onMonthChange) {
+        onMonthChange(startOfMonth(newDate));
+      }
       return newDate;
     });
-  }, []);
+  }, [onMonthChange]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -348,6 +351,9 @@ const CustomCalendar = ({
         case 'T':
           if (e.ctrlKey || e.metaKey) {
             setCurrentDate(new Date());
+            if (onMonthChange) {
+              onMonthChange(startOfMonth(new Date()));
+            }
           }
           break;
         default:
@@ -356,7 +362,7 @@ const CustomCalendar = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigateMonth]);
+  }, [navigateMonth, onMonthChange]);
 
   const getEventsForDate = useCallback((date) => {
     // Set time to start of day in IST
@@ -501,7 +507,12 @@ const CustomCalendar = ({
             </Button>
           </div>
           <div className="flex space-x-2 w-full md:w-auto justify-end">
-            <Button variant="secondary" onClick={() => setCurrentDate(new Date())}>
+            <Button variant="secondary" onClick={() => {
+              setCurrentDate(new Date());
+              if (onMonthChange) {
+                onMonthChange(startOfMonth(new Date()));
+              }
+            }}>
               Today
             </Button>
             <div className="flex space-x-2">
