@@ -79,7 +79,7 @@ const NotificationDropdown = () => {
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent   align="end" className="w-80  p-4 shadow-lg rounded-md bg-white -mr-1">
+      <PopoverContent   align="end" className="w-80  p-4 shadow-lg rounded-md bg-white -mr-12  md:-mr-1">
         <h3 className="font-bold mb-3">Notifications</h3>
         {notifications.length === 0 ? (
           <div className="text-gray-600">

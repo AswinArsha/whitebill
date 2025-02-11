@@ -16,16 +16,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { format, parseISO, startOfMonth, getDay, addDays } from "date-fns";
+import { format, parseISO, startOfMonth, getDay, addDays,endOfMonth ,min ,eachDayOfInterval ,isSameDay } from "date-fns";
 import { toast } from "react-hot-toast";
 import { supabase } from "../supabase";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AlertNotification from "./AlertNotification";
-import { Calendar as CalendarIcon, Clock, UserCheck, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, UserCheck, AlertTriangle,ArrowLeft  } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -37,13 +38,15 @@ import {
 // Import the AttendanceBadge component
 import AttendanceBadge from "./AttendanceBadge";
 
-const IndividualAttendanceReport = ({ role, userId }) => {
-  const { id } = useParams(); // Get user_id from route parameters
+const IndividualAttendanceReport = ({ role, userId: currentUserId }) => {
+  const { id } = useParams();
+  const [user, setUser] = useState(null);
+  const [organizationId, setOrganizationId] = useState(null);
+  const [userShift, setUserShift] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return format(now, "MMMM yyyy");
   });
-  const [user, setUser] = useState(null);
   const [attendanceStats, setAttendanceStats] = useState({
     daysPresent: 0,
     daysAbsent: 0,
@@ -52,179 +55,219 @@ const IndividualAttendanceReport = ({ role, userId }) => {
   });
   const [attendanceData, setAttendanceData] = useState([]);
   const [calendarData, setCalendarData] = useState([]);
-  const [loading, setLoading] = useState(true); // Loading state
-
-  // New state for attendance modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [offDays, setOffDays] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isLoadingOffDays, setIsLoadingOffDays] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [checkInStatus, setCheckInStatus] = useState(false);
   const [checkOutStatus, setCheckOutStatus] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
+  const navigate = useNavigate();
 
+  // Fetch user and organization details first
   useEffect(() => {
+    const fetchUserDetails = async () => {
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select(`
+            *,
+            organizations(*),
+            shifts (
+              id,
+              name,
+              check_in_time,
+              check_out_time,
+              late_threshold_minutes
+            )
+          `)
+          .eq("id", id)
+          .single();
+
+        if (userError) throw userError;
+
+        setUser(userData);
+        setUserShift(userData.shifts);
+        setOrganizationId(userData.organization_id);
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+        toast.error("Failed to fetch user details");
+      }
+    };
+
     if (id) {
       fetchUserDetails();
+    }
+  }, [id]);
+
+
+  // Fetch off days after we have the organization ID
+  useEffect(() => {
+    const fetchOffDays = async () => {
+      if (!organizationId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('off_days')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('is_active', true);
+
+        if (error) throw error;
+        setOffDays(data || []);
+      } catch (error) {
+        console.error('Error fetching off days:', error);
+        toast.error('Failed to fetch off days');
+      } finally {
+        setIsLoadingOffDays(false);
+      }
+    };
+
+    if (organizationId) {
+      fetchOffDays();
+    }
+  }, [organizationId]);
+
+  // Fetch attendance data after we have both user and off days data
+  useEffect(() => {
+    if (organizationId && !isLoadingOffDays) {
       fetchAttendanceDetails();
     }
-  }, [id, selectedMonth]);
+  }, [selectedMonth, organizationId, isLoadingOffDays]);
 
-  // Update current time every minute
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(format(new Date(), "hh:mm a")); // Changed to 12-hour format
-    }, 60000);
+  const isOffDay = (date) => {
+    const dayOfWeek = getDay(date);
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    return offDays.some(offDay => 
+      (offDay.day_type === 'weekly' && offDay.weekday === dayOfWeek) ||
+      (offDay.day_type === 'specific' && offDay.specific_date === dateStr)
+    );
+  };
 
-    setCurrentTime(format(new Date(), "hh:mm a")); // Initialize current time
 
-    return () => clearInterval(timer);
-  }, []);
-
-  const fetchUserDetails = async () => {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) {
-      console.error("Invalid user ID:", id);
-      setLoading(false);
-      return;
+  const getAttendanceStatus = (checkInTime, shift) => {
+    if (!checkInTime) return "Absent";
+    
+    if (shift) {
+      const shiftStart = shift.check_in_time;
+      const lateTime = addMinutes(
+        parseTime(shiftStart), 
+        shift.late_threshold_minutes
+      ).toTimeString().slice(0, 5);
+      return checkInTime <= lateTime ? "Present" : "Late";
+    } else {
+      // Default times if no shift assigned
+      return checkInTime <= "10:15" ? "Present" : "Late";
     }
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Error fetching user details:", error);
-      setLoading(false);
-      return;
-    }
-
-    setUser(data);
   };
 
   const fetchAttendanceDetails = async () => {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) {
-      console.error("Invalid user ID:", id);
-      setLoading(false);
-      return;
-    }
-
+    if (!id || !organizationId) return;
+  
+    setLoading(true);
+  
     const [month, year] = selectedMonth.split(" ");
     const firstDay = startOfMonth(new Date(`${month} 1, ${year}`));
-    const lastDay = new Date(
-      firstDay.getFullYear(),
-      firstDay.getMonth() + 1,
-      0
-    );
-    const today = new Date(); // Today's date
-
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("date, check_in, check_out")
-      .eq("user_id", userId)
-      .gte("date", format(firstDay, "yyyy-MM-dd"))
-      .lte("date", format(lastDay, "yyyy-MM-dd"));
-
-    if (error) {
-      console.error("Error fetching attendance details:", error);
-      setLoading(false);
-      return;
-    }
-
-    const attendanceMap = {};
-    data.forEach((record) => {
-      const dateStr = format(parseISO(record.date), "yyyy-MM-dd");
-      attendanceMap[dateStr] = {
-        check_in: record.check_in,
-        check_out: record.check_out,
-      };
-    });
-
-    const daysInMonth = lastDay.getDate();
-    const tempAttendanceData = [];
-    let daysPresent = 0;
-    let daysAbsent = 0;
-    let daysLate = 0;
-    let totalCheckInMinutes = 0;
-    let checkInCount = 0;
-
-    const tempCalendarData = [];
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(
-        firstDay.getFullYear(),
-        firstDay.getMonth(),
-        day
-      );
-      const dateStr = format(currentDate, "yyyy-MM-dd");
-
-      // Skip future days
-      if (currentDate > today) {
-        tempCalendarData.push({ date: day, status: "future" });
-        continue;
-      }
-
-      const record = attendanceMap[dateStr];
-      let checkIn = "-";
-      let checkOut = "-";
-      let status = "Absent";
-
-      if (record && (record.check_in || record.check_out)) {
-        checkIn = record.check_in ? formatTime(record.check_in) : "-";
-        checkOut = record.check_out ? formatTime(record.check_out) : "-";
-
-        if (record.check_in) {
-          if (record.check_in <= "10:15") { // Adjust the threshold as needed
-            status = "Present";
-          } else {
-            status = "Late";
-            daysLate += 1;
+    const lastDay = endOfMonth(firstDay);
+    const today = new Date();
+    const lastRelevantDay = min([lastDay, today]);
+    const daysInMonth = eachDayOfInterval({ start: firstDay, end: lastRelevantDay });
+  
+    try {
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from("attendance")
+        .select("date, check_in, check_out")
+        .eq("user_id", id)
+        .gte("date", format(firstDay, "yyyy-MM-dd"))
+        .lte("date", format(lastRelevantDay, "yyyy-MM-dd"));
+  
+      if (attendanceError) throw attendanceError;
+  
+      const tempAttendanceData = [];
+      let daysPresent = 0;
+      let daysAbsent = 0;
+      let daysLate = 0;
+      let totalCheckInMinutes = 0;
+      let checkInCount = 0;
+  
+      const tempCalendarData = [];
+  
+      for (const currentDate of daysInMonth) {
+        const dateStr = format(currentDate, "yyyy-MM-dd");
+        const dayOff = await isOffDay(currentDate, organizationId);
+  
+        const dayAttendance = attendanceData.filter(record =>
+          isSameDay(parseISO(record.date), currentDate)
+        );
+  
+        let checkIn = "-";
+        let checkOut = "-";
+        let status = dayOff ? "OffDay" : "Absent";
+  
+        if (dayAttendance.length > 0) {
+          checkIn = dayAttendance[0].check_in ? formatTime(dayAttendance[0].check_in) : "-";
+          checkOut = dayAttendance[0].check_out ? formatTime(dayAttendance[0].check_out) : "-";
+  
+          if (dayAttendance[0].check_in) {
+            status = getAttendanceStatus(dayAttendance[0].check_in, userShift);
+            
+            if (status !== "Absent") {
+              daysPresent += 1;
+              if (status === "Late") {
+                daysLate += 1;
+              }
+  
+              const checkInMinutes = convertTimeToMinutes(dayAttendance[0].check_in);
+              totalCheckInMinutes += checkInMinutes;
+              checkInCount += 1;
+            }
           }
-          daysPresent += 1;
-
-          const checkInMinutes = convertTimeToMinutes(record.check_in);
-          totalCheckInMinutes += checkInMinutes;
-          checkInCount += 1;
+        } else if (!dayOff && currentDate <= today) {
+          daysAbsent += 1;
         }
-      } else {
-        daysAbsent += 1;
+  
+        const day = currentDate.getDate();
+        
+        tempAttendanceData.push({
+          date: dateStr,
+          checkIn,
+          checkOut,
+          status,
+          isOffDay: dayOff
+        });
+  
+        tempCalendarData.push({
+          date: day,
+          status: status.toLowerCase(),
+          isOffDay: dayOff
+        });
       }
-
-      tempAttendanceData.push({
-        date: dateStr,
-        checkIn,
-        checkOut,
-        status,
+  
+      const averageCheckInTime =
+        checkInCount > 0
+          ? formatMinutesToTime(Math.round(totalCheckInMinutes / checkInCount))
+          : "-";
+  
+      setAttendanceStats({
+        daysPresent,
+        daysAbsent,
+        daysLate,
+        averageCheckInTime,
       });
-
-      tempCalendarData.push({
-        date: day,
-        status: status.toLowerCase(),
-      });
+  
+      const paddedCalendarData = padCalendarWithEmptyDays(tempCalendarData, firstDay);
+      setAttendanceData(tempAttendanceData);
+      setCalendarData(paddedCalendarData);
+    } catch (error) {
+      console.error("Error fetching attendance details:", error);
+      toast.error("Failed to fetch attendance data");
+    } finally {
+      setLoading(false);
     }
-
-    const averageCheckInTime =
-      checkInCount > 0
-        ? formatMinutesToTime(Math.round(totalCheckInMinutes / checkInCount))
-        : "-";
-
-    setAttendanceStats({
-      daysPresent,
-      daysAbsent,
-      daysLate,
-      averageCheckInTime,
-    });
-
-    const paddedCalendarData = padCalendarWithEmptyDays(
-      tempCalendarData,
-      firstDay
-    );
-
-    setAttendanceData(tempAttendanceData);
-    setCalendarData(paddedCalendarData);
-    setLoading(false);
   };
+  
 
   // Helper Functions
 
@@ -250,6 +293,17 @@ const IndividualAttendanceReport = ({ role, userId }) => {
     const date = new Date();
     date.setHours(hours, minutes);
     return format(date, "hh:mm a");
+  };
+
+  const parseTime = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  };
+
+  const addMinutes = (date, minutes) => {
+    return new Date(date.getTime() + minutes * 60000);
   };
 
   // Pad the calendar with empty days based on the first day of the month
@@ -278,7 +332,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
 
   // Handle clicking on a date in the calendar
   const handleDateClick = async (day) => {
-    if (!day.date || day.status === "future" || day.status === "empty") return;
+    if (!day.date || day.status === "future" || day.status === "empty" || day.isOffDay) return;
 
     const [month, year] = selectedMonth.split(" ");
     const clickedDate = new Date(`${month} ${day.date}, ${year}`);
@@ -303,6 +357,39 @@ const IndividualAttendanceReport = ({ role, userId }) => {
     setIsModalOpen(true);
   };
 
+  const renderAttendanceTable = () => (
+    <Table className="relative">
+      <TableHeader className="sticky top-0 bg-white z-10">
+        <TableRow>
+          <TableHead>Date</TableHead>
+          <TableHead>Check In</TableHead>
+          <TableHead>Check Out</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {attendanceData.map((record, index) => (
+          <TableRow key={index}>
+            <TableCell>{format(parseISO(record.date), "dd-MM-yyyy")}</TableCell>
+            <TableCell>{record.checkIn}</TableCell>
+            <TableCell>{record.checkOut}</TableCell>
+            <TableCell>
+              {record.isOffDay ? (
+                <Badge variant="secondary">
+                <span className="sm:hidden">Off</span>
+                <span className="hidden sm:inline">Off Day</span>
+              </Badge>
+              
+              ) : (
+                <AttendanceBadge status={record.status} />
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   // Handle saving attendance (check-in/check-out)
   const handleSaveAttendance = async () => {
     if (!selectedDate) return;
@@ -311,7 +398,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
     const currentTimeStr = format(new Date(), "HH:mm");
 
     try {
-      // Check if a record exists for this date
       const { data: existingRecord, error } = await supabase
         .from("attendance")
         .select("*")
@@ -319,12 +405,9 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         .eq("date", formattedDate)
         .single();
 
-      if (error && error.code !== "PGRST116") { // Ignore no rows found error
-        throw error;
-      }
+      if (error && error.code !== "PGRST116") throw error;
 
       if (existingRecord) {
-        // Update existing record
         const updates = {};
         if (checkInStatus && !existingRecord.check_in) {
           updates.check_in = currentTimeStr;
@@ -334,7 +417,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
         }
 
         if (Object.keys(updates).length === 0) {
-          toast.info("No changes to save.");
+         
           return;
         }
 
@@ -345,7 +428,6 @@ const IndividualAttendanceReport = ({ role, userId }) => {
 
         if (updateError) throw updateError;
       } else {
-        // Create new record
         await supabase
           .from("attendance")
           .insert({
@@ -358,7 +440,7 @@ const IndividualAttendanceReport = ({ role, userId }) => {
 
       toast.success("Attendance updated successfully!");
       setIsModalOpen(false);
-      fetchAttendanceDetails(); // Refresh the data
+      fetchAttendanceDetails();
     } catch (error) {
       console.error("Error updating attendance:", error);
       toast.error("Failed to update attendance.");
@@ -379,7 +461,11 @@ const IndividualAttendanceReport = ({ role, userId }) => {
           onClick={() => handleDateClick(day)}
           className={`aspect-square flex items-center justify-center rounded-full text-sm cursor-pointer
             ${
-              day.status === "present"
+              day.status === "empty"
+                ? "bg-transparent cursor-default"
+                : day.isOffDay
+                ? "bg-gray-200 text-gray-600 cursor-not-allowed"
+                : day.status === "present"
                 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
                 : day.status === "absent"
                 ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
@@ -387,12 +473,13 @@ const IndividualAttendanceReport = ({ role, userId }) => {
                 ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
                 : day.status === "future"
                 ? "bg-gray-50 text-gray-400 cursor-not-allowed"
-                : day.status === "empty"
-                ? "bg-transparent cursor-default"
                 : "bg-gray-100 hover:bg-gray-200"
             }`}
         >
           {day.date}
+          {day.isOffDay && (
+            <span className="absolute bottom-0 right-0 w-2 h-2 bg-gray-500 rounded-full" />
+          )}
         </div>
       ))}
     </div>
@@ -430,10 +517,23 @@ const IndividualAttendanceReport = ({ role, userId }) => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
         <div>
+        <Button
+  variant="outline"
+  className="mb-4 px-4 py-2 text-sm -mt-10 sm:-mt-22 -ml-2 font-medium flex items-center"
+  onClick={() => navigate("/home/attendance")}
+>
+  <ArrowLeft className="w-5 h-5" /> {/* Adjust icon size */}
+  <span>Back</span> {/* Clearer text */}
+</Button>
           <h1 className="text-xl font-bold">{user.name}</h1>
           <p className="text-muted-foreground">
             {user.position}, {user.department}
           </p>
+          {userShift && (
+            <Badge variant="secondary" className="mt-2">
+              {userShift.name} ({formatTime(userShift.check_in_time)} - {formatTime(userShift.check_out_time)})
+            </Badge>
+          )}
           <AlertNotification />
         </div>
         <div className="flex items-center justify-end space-x-4">
@@ -506,7 +606,13 @@ const IndividualAttendanceReport = ({ role, userId }) => {
             <CardTitle>Attendance Calendar</CardTitle>
           </CardHeader>
           <CardContent>
-            {renderCalendar()}
+            {isLoadingOffDays ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+              </div>
+            ) : (
+              renderCalendar()
+            )}
           </CardContent>
         </Card>
 
@@ -516,28 +622,13 @@ const IndividualAttendanceReport = ({ role, userId }) => {
             <CardTitle>Attendance Details</CardTitle>
           </CardHeader>
           <CardContent className="overflow-auto max-h-[460px]">
-            <Table className="relative">
-              <TableHeader className="sticky top-0 bg-white z-10">
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Check In</TableHead>
-                  <TableHead>Check Out</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attendanceData.map((record, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{format(parseISO(record.date), "dd-MM-yyyy")}</TableCell>
-                    <TableCell>{record.checkIn}</TableCell>
-                    <TableCell>{record.checkOut}</TableCell>
-                    <TableCell>
-                      <AttendanceBadge status={record.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {isLoadingOffDays ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+              </div>
+            ) : (
+              renderAttendanceTable()
+            )}
           </CardContent>
         </Card>
       </div>
@@ -599,3 +690,4 @@ const IndividualAttendanceReport = ({ role, userId }) => {
 
 
 export default IndividualAttendanceReport;
+

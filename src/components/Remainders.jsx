@@ -280,7 +280,7 @@ const Remainders = ({ role, userId }) => {
       </div>
 
       {/* Main Card */}
-      <Card className="bg-gray-50 p-6 shadow-none">
+      <Card className="bg-gray-50 p-6 shadow-none h-[80vh]">
         {/* Search and Add Reminder Button */}
         <div className="flex justify-between mb-6">
           <Input
@@ -359,10 +359,17 @@ const Remainders = ({ role, userId }) => {
 
         {/* Tabs for Upcoming and Completed Reminders */}
         <Tabs defaultValue="upcoming" className="w-full">
-          <TabsList>
-            <TabsTrigger value="upcoming">Upcoming Reminders</TabsTrigger>
-            <TabsTrigger value="completed">Completed Reminders</TabsTrigger>
-          </TabsList>
+        <TabsList>
+  <TabsTrigger value="upcoming">
+    <span className="sm:hidden">Upcoming</span>
+    <span className="hidden sm:inline">Upcoming Reminders</span>
+  </TabsTrigger>
+  <TabsTrigger value="completed">
+    <span className="sm:hidden">Completed</span>
+    <span className="hidden sm:inline">Completed Reminders</span>
+  </TabsTrigger>
+</TabsList>
+
 
           <TabsContent value="upcoming">
             <ul className="mt-4">

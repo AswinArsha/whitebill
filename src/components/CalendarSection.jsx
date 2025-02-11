@@ -1,3 +1,4 @@
+// CalendarSection.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import CustomCalendar from "./CustomCalendar";
 import {
@@ -20,8 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import MarkAsDone from "./MarkAsDone"; // Ensure the path is correct
-
+import MarkAsDone from "./MarkAsDone";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "../supabase";
 import {
   Card,
@@ -37,34 +38,16 @@ import AlertNotification from "./AlertNotification";
 import jsPDF from "jspdf";
 import { startOfMonth, endOfMonth } from 'date-fns';
 
-const CATEGORIES = [
-  { value: "shoot", label: "Shoot" },
-  { value: "meeting", label: "Meeting" },
-  { value: "post", label: "Post" },
-  { value: "editing", label: "Editing" },
-  { value: "ad_campaign", label: "Ad Campaign" },
-  { value: "poster_design", label: "Poster Design" },
-  { value: "task", label: "Task" },
-];
+// Import the new Category Manager dialog component
+import CategoryManagerDialog from "./CategoryManagerDialog";
 
-const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGORIES];
-
-const getCategoryColor = (category, isDone) => {
-  if (isDone) return "#4caf50"; // Green for done events
-  switch (category) {
-    case "shoot": return "#f06543";  
-    case "meeting": return "#0582ca";  
-    case "post": return "#f48c06"; 
-    case "editing": return "#9d4edd";  
-    case "ad_campaign": return "#ad2831";  
-    case "poster_design": return "#ffc300";  
-    case "task": return "#335c67";  
-    default: return "#6c757d";  
-  }
-};
+// NOTE: We no longer use hard-coded CATEGORIES and FILTER_CATEGORIES.
+// Instead, we’ll load them from the database.
 
 const CalendarSection = ({ role, userId }) => {
+  // -----------------------
   // State variables
+  // -----------------------
   const [events, setEvents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -74,7 +57,7 @@ const CalendarSection = ({ role, userId }) => {
     start: "",
     end: "",
     location: "",
-    category: "",
+    category: "", // Now this will store a category UUID
     allDay: false,
     isDone: false,
     clientName: "",
@@ -93,7 +76,41 @@ const CalendarSection = ({ role, userId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showFilters, setShowFilters] = useState(false);
 
+  // NEW: Manage categories loaded from Supabase.
+  const [categories, setCategories] = useState([]);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+
+  // -----------------------
+  // Helper: Get category color
+  // -----------------------
+  const getCategoryColor = (categoryId, isDone) => {
+    if (isDone) return "#4caf50"; // Green for done events
+    // Try to find the category from the loaded list:
+    const cat = categories.find((c) => c.id === categoryId);
+    return cat ? cat.color : "#6c757d";
+  };
+
+  const formatCategoryLabel = (label) => {
+    if (!label) return "";
+    return label
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+
+  // -----------------------
+  // Fetch categories from Supabase
+  // -----------------------
+  const fetchCategories = async () => {
+    const { data, error } = await supabase.from("categories").select("*").order("label");
+    if (error) console.error("Error fetching categories:", error);
+    else setCategories(data);
+  };
+
+  // -----------------------
   // Fetch clients
+  // -----------------------
   const fetchClients = async () => {
     const { data, error } = await supabase.from("clients").select("client_name").order("client_name");
     if (error) console.error("Error fetching clients:", error);
@@ -102,7 +119,9 @@ const CalendarSection = ({ role, userId }) => {
     }
   };
 
+  // -----------------------
   // Fetch users
+  // -----------------------
   const fetchUsers = async () => {
     const { data, error } = await supabase.from("users").select("id, name").eq("show", true).order("name");
     if (error) console.error("Error fetching users:", error);
@@ -114,14 +133,19 @@ const CalendarSection = ({ role, userId }) => {
   useEffect(() => {
     fetchClients();
     fetchUsers();
+    fetchCategories();
   }, [role]);
 
-  // Handler to update currentMonth state
+  // -----------------------
+  // Update currentMonth state
+  // -----------------------
   const handleMonthChange = useCallback((newMonthStartDate) => {
     setCurrentMonth(newMonthStartDate);
   }, []);
 
-  // Fetch events based on the current month without applying additional filters
+  // -----------------------
+  // Fetch events based on the current month (without additional filters)
+  // -----------------------
   const fetchEvents = useCallback(async () => {
     try {
       const rangeStart = startOfMonth(currentMonth).toISOString();
@@ -140,9 +164,7 @@ const CalendarSection = ({ role, userId }) => {
       const { data: allEvents, error: baseError } = await query;
       if (baseError) throw baseError;
 
-     
-
-      // Process the fetched events
+      // Process the fetched events (ensure assigned_user_ids is an array)
       const processedEvents = allEvents.map(event => {
         let assignedIds = [];
         if (Array.isArray(event.assigned_user_ids)) {
@@ -157,8 +179,7 @@ const CalendarSection = ({ role, userId }) => {
         return { ...event, assigned_user_ids: assignedIds };
       });
 
-     
-
+      // Format events for the calendar
       const formattedEvents = processedEvents.map((event) => {
         const startDate = new Date(event.start_time);
         const endDate = new Date(event.end_time);
@@ -175,7 +196,7 @@ const CalendarSection = ({ role, userId }) => {
           extendedProps: {
             description: event.description || '',
             location: event.location || '',
-            category: event.category || 'unknown',
+            category: event.category || null, // now a UUID reference
             isDone: event.is_done || false,
             clientName: event.client_name || 'N/A',
             assignedUserIds: event.assigned_user_ids || [],
@@ -183,20 +204,20 @@ const CalendarSection = ({ role, userId }) => {
         };
       }).filter(event => event !== null);
 
-     
-
       setEvents(formattedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
-  }, [role, userId, currentMonth]);
+  }, [role, userId, currentMonth, categories]); // include categories in dependency
 
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents, currentMonth]);
 
-  // Realtime subscription to listen for changes in the events table
+  // -----------------------
+  // Realtime subscription for events table
+  // -----------------------
   useEffect(() => {
     const channel = supabase
       .channel('custom-all-channel')
@@ -204,7 +225,6 @@ const CalendarSection = ({ role, userId }) => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events' },
         (payload) => {
-      
           fetchEvents(); // Re-fetch events on any change
         }
       )
@@ -215,7 +235,9 @@ const CalendarSection = ({ role, userId }) => {
     };
   }, [fetchEvents]);
 
-  // Handle opening the dialog for adding an event
+  // -----------------------
+  // Event Handlers for opening dialogs
+  // -----------------------
   const handleDateSelect = (selectInfo) => {
     if (role !== "admin") return;
     setMode("add");
@@ -230,12 +252,11 @@ const CalendarSection = ({ role, userId }) => {
       allDay: selectInfo.allDay,
       isDone: false,
       clientName: "",
-      assignedUserIds: [], // Initialize as empty array
+      assignedUserIds: [],
     });
     setIsModalOpen(true);
   };
 
-  // Handle opening the dialog for editing/viewing an event
   const handleEventClick = ({ event }) => {
     if (role === "admin") {
       setMode("edit");
@@ -246,10 +267,10 @@ const CalendarSection = ({ role, userId }) => {
       id: event.id,
       title: event.title,
       description: event.extendedProps.description,
-      start: event.start,                           // Use event.start
-      end: event.end || event.start,                // Use event.end or fallback
+      start: event.start,
+      end: event.end || event.start,
       location: event.extendedProps.location,
-      category: event.extendedProps.category,
+      category: event.extendedProps.category, // a UUID
       allDay: event.allDay,
       isDone: event.extendedProps.isDone,
       clientName: event.extendedProps.clientName,
@@ -258,34 +279,34 @@ const CalendarSection = ({ role, userId }) => {
     setIsModalOpen(true);
   };
 
-  // Validation and event handlers remain unchanged
+  // -----------------------
+  // Validate event form (skip in view mode)
+  // -----------------------
   const validateEvent = () => {
     let isValid = true;
     const newErrors = { title: "", category: "" };
-  
-    if (mode !== 'view') { // Skip validation in 'view' mode
+
+    if (mode !== 'view') {
       if (!newEvent.title) {
         newErrors.title = "Event title is required.";
         isValid = false;
       }
-  
       if (!newEvent.category) {
         newErrors.category = "Event category is required.";
         isValid = false;
       }
     }
-  
+
     setErrors(newErrors);
     return isValid;
   };
 
+  // -----------------------
+  // Handle add/update (and view-mode “done” update)
+  // -----------------------
   const handleEventAddOrUpdate = async () => {
-    // In 'view' mode, we only update the 'is_done' status
     if (mode === 'view') {
-      const eventToSubmit = {
-        is_done: newEvent.isDone,
-      };
-
+      const eventToSubmit = { is_done: newEvent.isDone };
       const { error } = await supabase
         .from("events")
         .update(eventToSubmit)
@@ -299,37 +320,29 @@ const CalendarSection = ({ role, userId }) => {
           currentEvents.map((event) =>
             event.id === newEvent.id
               ? {
-                  ...event,
+                ...event,
+                isDone: newEvent.isDone,
+                backgroundColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
+                borderColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
+                extendedProps: {
+                  ...event.extendedProps,
                   isDone: newEvent.isDone,
-                  backgroundColor: getCategoryColor(
-                    event.extendedProps.category,
-                    newEvent.isDone
-                  ),
-                  borderColor: getCategoryColor(
-                    event.extendedProps.category,
-                    newEvent.isDone
-                  ),
-                  extendedProps: {
-                    ...event.extendedProps,
-                    isDone: newEvent.isDone,
-                  },
-                }
+                },
+              }
               : event
           )
         );
         setIsModalOpen(false);
         toast.success(
-          newEvent.isDone 
-            ? "Task completed successfully! 🎉" 
-            : "Task marked as incomplete.", 
+          newEvent.isDone
+            ? "Task completed successfully! 🎉"
+            : "Task marked as incomplete.",
           { duration: 3000 }
         );
-        
       }
-      return; // Exit the function after handling 'view' mode
+      return;
     }
 
-    // Existing logic for 'edit' and 'add' modes
     if (validateEvent()) {
       const eventToSubmit = {
         title: newEvent.title,
@@ -341,11 +354,11 @@ const CalendarSection = ({ role, userId }) => {
           ? `${newEvent.end}T23:59:59Z`
           : newEvent.end,
         location: newEvent.location,
-        category: newEvent.category,
+        category: newEvent.category, // now a UUID reference
         all_day: newEvent.allDay,
-        is_done: newEvent.isDone, // This value is now updated correctly
+        is_done: newEvent.isDone,
         client_name: newEvent.clientName,
-        assigned_user_ids: newEvent.assignedUserIds, // Include assignedUserIds
+        assigned_user_ids: newEvent.assignedUserIds,
       };
 
       if (mode === 'edit' && role === "admin") {
@@ -358,35 +371,26 @@ const CalendarSection = ({ role, userId }) => {
           console.error("Error updating event:", error);
           toast.error("Failed to update event. Please try again.");
         } else {
-          // Update the local state immediately
           setEvents((currentEvents) =>
             currentEvents.map((event) =>
               event.id === newEvent.id
                 ? {
-                    ...event,
-                    ...eventToSubmit,
-                    backgroundColor: getCategoryColor(
-                      eventToSubmit.category,
-                      eventToSubmit.is_done
-                    ),
-                    borderColor: getCategoryColor(
-                      eventToSubmit.category,
-                      eventToSubmit.is_done
-                    ),
-                    extendedProps: {
-                      ...event.extendedProps,
-                      isDone: eventToSubmit.is_done, // Update the isDone property locally
-                      category: eventToSubmit.category,
-                      assignedUserIds: eventToSubmit.assigned_user_ids, // Update assignedUserIds
-                    },
-                  }
+                  ...event,
+                  ...eventToSubmit,
+                  backgroundColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
+                  borderColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
+                  extendedProps: {
+                    ...event.extendedProps,
+                    isDone: eventToSubmit.is_done,
+                    category: eventToSubmit.category,
+                    assignedUserIds: eventToSubmit.assigned_user_ids,
+                  },
+                }
                 : event
             )
           );
           setIsModalOpen(false);
-          toast.success('Event updated successfully! ✏️', {
-            duration: 3000,
-          });
+          toast.success('Event updated successfully! ✏️', { duration: 3000 });
         }
       } else if (mode === 'add' && role === "admin") {
         const { data, error } = await supabase
@@ -417,22 +421,22 @@ const CalendarSection = ({ role, userId }) => {
           };
           setEvents((currentEvents) => [...currentEvents, newFormattedEvent]);
           setIsModalOpen(false);
-          toast.success('Event added successfully! 🎉', {
-            duration: 3000,
-          });
+          toast.success('Event added successfully! 🎉', { duration: 3000 });
         }
       }
     }
   };
 
-  // Handle Event Deletion (unchanged)
+  // -----------------------
+  // Delete event
+  // -----------------------
   const handleEventDelete = async () => {
     if (mode === 'edit' && role === "admin") {
       const { error } = await supabase
         .from("events")
         .delete()
         .eq("id", newEvent.id);
-  
+
       if (error) {
         console.error("Error deleting event:", error);
         toast.error("Failed to delete event. Please try again.");
@@ -441,30 +445,27 @@ const CalendarSection = ({ role, userId }) => {
           currentEvents.filter((event) => event.id !== newEvent.id)
         );
         setIsModalOpen(false);
-        toast.success('Event deleted successfully! 🗑️ ', {
-          duration: 3000,
-          
-        });
-        
+        toast.success('Event deleted successfully! 🗑️', { duration: 3000 });
       }
     }
   };
 
-  // Handle Event Drop (unchanged)
+  // -----------------------
+  // Event Drop & Resize (unchanged)
+  // -----------------------
   const handleEventDrop = async (dropInfo) => {
     if (role !== "admin") return;
-    
     const updatedEvent = {
       start_time: dropInfo.event.start,
       end_time: dropInfo.event.end,
       all_day: dropInfo.event.allDay
     };
-  
+
     const { error } = await supabase
       .from("events")
       .update(updatedEvent)
       .eq("id", dropInfo.event.id);
-  
+
     if (error) {
       console.error("Error updating event timing:", error);
       toast.error("Failed to update event timing. Please try again.");
@@ -473,31 +474,22 @@ const CalendarSection = ({ role, userId }) => {
         currentEvents.map((event) =>
           event.id === dropInfo.event.id
             ? {
-                ...event,
-                start: updatedEvent.start_time,
-                end: updatedEvent.end_time,
-                allDay: updatedEvent.all_day,
-                backgroundColor: getCategoryColor(
-                  event.extendedProps.category,
-                  event.extendedProps.isDone
-                ),
-                borderColor: getCategoryColor(
-                  event.extendedProps.category,
-                  event.extendedProps.isDone
-                ),
-              }
+              ...event,
+              start: updatedEvent.start_time,
+              end: updatedEvent.end_time,
+              allDay: updatedEvent.all_day,
+              backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+              borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+            }
             : event
         )
       );
-      toast.success('Event moved successfully! 📅', {
-        duration: 3000,
-      });
+      toast.success('Event moved successfully! 📅', { duration: 3000 });
     }
   };
 
-  // Handle Event Resize (unchanged)
   const handleEventResize = async (resizeInfo) => {
-    if (role !== "admin") return; // Only admins can resize events
+    if (role !== "admin") return;
     const updatedEvent = {
       id: resizeInfo.event.id,
       start_time: resizeInfo.event.allDay
@@ -508,12 +500,12 @@ const CalendarSection = ({ role, userId }) => {
         : resizeInfo.event.endStr || resizeInfo.event.startStr,
       all_day: resizeInfo.event.allDay,
     };
-  
+
     const { error } = await supabase
       .from("events")
       .update(updatedEvent)
       .eq("id", updatedEvent.id);
-  
+
     if (error) {
       console.error("Error updating event resizing:", error);
       alert("Failed to resize event. Please try again.");
@@ -522,34 +514,29 @@ const CalendarSection = ({ role, userId }) => {
         currentEvents.map((event) =>
           event.id === updatedEvent.id
             ? {
-                ...event,
-                start: updatedEvent.start_time,
-                end: updatedEvent.end_time,
-                allDay: updatedEvent.all_day,
-                backgroundColor: getCategoryColor(
-                  event.extendedProps.category,
-                  event.extendedProps.isDone
-                ),
-                borderColor: getCategoryColor(
-                  event.extendedProps.category,
-                  event.extendedProps.isDone
-                ),
-                extendedProps: {
-                  ...event.extendedProps,
-                  start_time: updatedEvent.start_time,
-                  end_time: updatedEvent.end_time,
-                },
-              }
+              ...event,
+              start: updatedEvent.start_time,
+              end: updatedEvent.end_time,
+              allDay: updatedEvent.all_day,
+              backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+              borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+              extendedProps: {
+                ...event.extendedProps,
+                start_time: updatedEvent.start_time,
+                end_time: updatedEvent.end_time,
+              },
+            }
             : event
         )
       );
     }
   };
 
-  // PDF Generation (unchanged)
+  // -----------------------
+  // PDF Generation & Month Change (unchanged)
+  // -----------------------
   const generateEnhancedCalendarPDF = () => {
     // ... existing PDF generation code
-    // You may want to include assigned users in the PDF if needed
   };
 
   const triggerPrint = useCallback(() => {
@@ -567,7 +554,9 @@ const CalendarSection = ({ role, userId }) => {
     }
   }, [isPrinting, triggerPrint]);
 
-  // Centralized function to close the dialog and reset state
+  // -----------------------
+  // Close dialog and reset state
+  // -----------------------
   const handleCloseDialog = () => {
     setIsModalOpen(false);
     setMode(null);
@@ -582,211 +571,174 @@ const CalendarSection = ({ role, userId }) => {
       allDay: false,
       isDone: false,
       clientName: "",
-      assignedUserIds: [], // Reset assignedUserIds
+      assignedUserIds: [],
     });
     setErrors({ title: "", category: "" });
   };
 
+  // -----------------------
   // Client-side Filtering
+  // -----------------------
+  // Build filterCategories dynamically using the fetched categories.
+  const filterCategories = useMemo(() => {
+    return [
+      { value: "all", label: "All Categories" },
+      ...categories.map(cat => ({
+        value: cat.id,
+        label: formatCategoryLabel(cat.label)
+      }))
+    ];
+  }, [categories]);
+
+
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
       // Filter by category
       if (filterCategory !== "all" && event.extendedProps.category !== filterCategory) {
         return false;
       }
-  
+
       // Filter by client name
       if (filterClientName && event.extendedProps.clientName !== filterClientName) {
         return false;
       }
-  
+
       // Filter by assigned user
       if (filterAssignedUser !== "all") {
-        // Ensure assignedUserIds is an array and convert to strings for comparison
         const assignedUserIds = event.extendedProps.assignedUserIds || [];
         const assignedUserStrings = assignedUserIds.map(id => id.toString());
-        
         if (!assignedUserStrings.includes(filterAssignedUser)) {
           return false;
         }
       }
-  
+
       // Search by title (case-insensitive)
-      if (searchTerm && 
-          !event.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+      if (searchTerm &&
+        !event.title.toLowerCase().includes(searchTerm.toLowerCase())) {
         return false;
       }
-  
+
       return true;
     });
   }, [events, filterCategory, filterClientName, filterAssignedUser, searchTerm]);
 
+  useEffect(() => { }, [filteredEvents]);
+  useEffect(() => { }, [currentMonth]);
   useEffect(() => {
-  
-  }, [filteredEvents]);
-
-  useEffect(() => {
-  
-  }, [currentMonth]);
-
-  useEffect(() => {
-    events.forEach(event => {
-     
-    });
+    events.forEach(event => { });
   }, [events]);
 
   return (
     <div>
       <Toaster position="bottom-center" reverseOrder={false} />
-      {/* Custom CSS for FullCalendar popover */}
       <style jsx>{`
         .fc-popover {
-          z-index: 1000 !important; /* Set the z-index lower than the dialog's */
+          z-index: 1000 !important;
         }
       `}</style>
 
       {/* Header */}
       <div className="flex justify-between items-center ">
         <div className="flex space-x-5 mb-4">
-          <div>
-            {/* Additional header content if needed */}
-          </div>
+          <div>{/* Additional header content if needed */}</div>
           <AlertNotification />
         </div>
       </div>
       <Card className="bg-gray-50 p-4">
-        {/* Mobile: Show a hamburger menu to toggle the filter */}
+        {/* Mobile hamburger for filters */}
         <div className="md:hidden mb-4">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            type="button"
-          >
+          <Button variant="outline" onClick={() => setShowFilters(!showFilters)} type="button">
             <Menu className="w-6 h-6" />
           </Button>
         </div>
 
-        {/* Filters are hidden on mobile unless the menu is toggled */}
-        
-        <div
-          className={`md:flex mb-4 space-x-2 ${
-            showFilters ? "block" : "hidden"
-          } md:block`}
-        >
-          {/* Search Input */}
+        {/* Filters */}
+        <div className={`flex flex-col md:flex-row md:items-center mb-4 space-y-2 md:space-y-0 md:space-x-4 ${showFilters ? "block" : "hidden"} md:flex`}>
           <Input
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="mb-2 md:mb-0"
+            className="w-full px-3 py-2 text-sm"
           />
-
-          {/* Category Filter */}
           <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full px-3 py-2 text-sm">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
-              {FILTER_CATEGORIES.map((category) => (
+              {filterCategories.map((category) => (
                 <SelectItem key={category.value} value={category.value}>
                   {category.label}
                 </SelectItem>
               ))}
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 px-4 py-2  w-full"
+                onClick={() => setIsCategoryManagerOpen(true)}
+              >
+                <Plus className="w-5 h-5 text-gray-700" />
+                <span className="text-gray-800 font-medium">Add Category</span>
+              </Button>
+
             </SelectContent>
+
           </Select>
 
-          {/* Client Name Filter - Replaced Popover with Select */}
+
           <Select
             value={filterClientName || "all"}
             onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full px-3 py-2 text-sm">
               <SelectValue placeholder="All Clients" />
             </SelectTrigger>
-            <SelectContent className="h-100 overflow-y-auto relative z-[1050]">
-              <SelectItem key="all" value="all">
-                All Clients
-              </SelectItem>
+            <SelectContent className="max-h-80 overflow-y-auto">
+              <SelectItem key="all" value="all">All Clients</SelectItem>
               {clients.map((client) => (
-                <SelectItem
-                  key={client.value}
-                  value={client.value}
-                >
-                  {client.label}
-                </SelectItem>
+                <SelectItem key={client.value} value={client.value}>{client.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-
-          {/* Assign To Filter - New Select Box */}
           {role === "admin" && (
-          <Select
-            value={filterAssignedUser}
-            onValueChange={(value) => setFilterAssignedUser(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All Assigned Users" />
-            </SelectTrigger>
-            <SelectContent className="max-h-80 overflow-y-auto relative z-[1050]">
-              <SelectItem key="all" value="all">
-                All Assigned Users
-              </SelectItem>
-              {users.filter(user => user.label.toLowerCase() !== 'admin').map((user) => (
-                <SelectItem
-                  key={user.value}
-                  value={user.value.toString()}
-                >
-                  {user.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          )}
-
-          {/* Download PDF Button */}
-          {role === "admin" && (
-            <div className="flex justify-end mb-4">
-              {/* <Button
-                onClick={() => setIsPrinting(true)}
-                className="flex items-center space-x-2"
-                type="button"
-              >
-                <Printer className="h-5 w-5 text-white" />
-                <span>Print Calendar</span>
-              </Button> */}
-            </div>
+            <Select value={filterAssignedUser} onValueChange={setFilterAssignedUser}>
+              <SelectTrigger className="w-full  px-3 py-2 text-sm">
+                <SelectValue placeholder="All Assigned Users" />
+              </SelectTrigger>
+              <SelectContent className="max-h-80 overflow-y-auto">
+                <SelectItem key="all" value="all">All Assigned Users</SelectItem>
+                {users.filter(user => user.label.toLowerCase() !== 'admin').map((user) => (
+                  <SelectItem key={user.value} value={user.value.toString()}>{user.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
 
+        {/* Category Manager Dialog */}
+        {isCategoryManagerOpen && (
+          <CategoryManagerDialog
+            onClose={() => {
+              setIsCategoryManagerOpen(false);
+              fetchCategories(); // refresh categories
+            }}
+          />
+        )}
 
-        {/* Conditionally Render the Dialog */}
+        {/* Event Dialog */}
         {isModalOpen && (
-          <Dialog open={isModalOpen} onOpenChange={(open) => {
-            if (!open) {
-              handleCloseDialog();
-            }
-          }}>
+          <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) handleCloseDialog(); }}>
             <DialogContent className="z-[1001] w-full sm:max-w-3xl p-4 sm:p-6 bg-white rounded-lg shadow-lg">
               <DialogHeader>
-                <DialogTitle className="text-xl  sm:text-2xl font-semibold mb-2">
-                  {mode === "edit"
-                    ? "Edit Event"
-                    : mode === "add"
-                    ? "Add New Event"
-                    : "View Event"}
+                <DialogTitle className="text-xl sm:text-2xl font-semibold mb-2">
+                  {mode === "edit" ? "Edit Event" : mode === "add" ? "Add New Event" : "View Event"}
                 </DialogTitle>
-                <DialogDescription className="text-gray-600 text-sm sm:text-base">
-                  {mode === "edit"
-                    ? "Update the details of the event."
-                    : mode === "add"
-                    ? "Fill in the details of the new event."
-                    : "View the details of the event and mark it as done."}
+                <DialogDescription className="text-gray-600 text-sm hidden sm:block sm:text-base">
+                  {mode === "edit" ? "Update the details of the event."
+                    : mode === "add" ? "Fill in the details of the new event."
+                      : "View the details of the event and mark it as done."}
                 </DialogDescription>
               </DialogHeader>
 
-              {/* Dialog Form */}
               <div className="space-y-4 sm:space-y-6">
-                {/* Event Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   {/* Event Title */}
                   <div>
@@ -809,9 +761,7 @@ const CalendarSection = ({ role, userId }) => {
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     )}
-                    {errors.title && (
-                      <p className="mt-1 text-sm text-red-600">{errors.title}</p>
-                    )}
+                    {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
                   </div>
 
                   {/* Client Name */}
@@ -839,9 +789,7 @@ const CalendarSection = ({ role, userId }) => {
                           <SelectValue placeholder="Select a client" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
-                          <SelectItem key="all" value="all">
-                            All Clients
-                          </SelectItem>
+                          <SelectItem key="all" value="all">All Clients</SelectItem>
                           {clients.map((client) => (
                             <SelectItem key={client.value} value={client.value}>
                               {client.label}
@@ -853,7 +801,6 @@ const CalendarSection = ({ role, userId }) => {
                   </div>
                 </div>
 
-                {/* Category and Assign To */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   {/* Category */}
                   <div>
@@ -863,34 +810,37 @@ const CalendarSection = ({ role, userId }) => {
                     {mode === "view" ? (
                       <Input
                         id="category"
-                        value={newEvent.category}
+                        value={formatCategoryLabel(categories.find(c => c.id === newEvent.category)?.label || "")}
                         readOnly
                         className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
                       />
+
                     ) : (
-                      <Select
-                        value={newEvent.category}
-                        onValueChange={(value) =>
-                          setNewEvent({ ...newEvent, category: value })
-                        }
-                        required
-                        className="mt-1"
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
-                          {CATEGORIES.map((category) => (
-                            <SelectItem key={category.value} value={category.value}>
-                              {category.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex">
+                        <Select
+                          value={newEvent.category}
+                          onValueChange={(value) =>
+                            setNewEvent({ ...newEvent, category: value })
+                          }
+                          required
+                          className="mt-1 flex-1"
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto relative z-[1050]">
+                            {categories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {formatCategoryLabel(cat.label)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+
+                        </Select>
+
+                      </div>
                     )}
-                    {errors.category && (
-                      <p className="mt-1 text-sm text-red-600">{errors.category}</p>
-                    )}
+                    {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category}</p>}
                   </div>
 
                   {/* Assign To */}
@@ -933,7 +883,6 @@ const CalendarSection = ({ role, userId }) => {
                   </div>
                 </div>
 
-                {/* Remarks and Location */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   {/* Remarks */}
                   <div>
@@ -952,10 +901,7 @@ const CalendarSection = ({ role, userId }) => {
                         id="description"
                         value={newEvent.description}
                         onChange={(e) =>
-                          setNewEvent({
-                            ...newEvent,
-                            description: e.target.value,
-                          })
+                          setNewEvent({ ...newEvent, description: e.target.value })
                         }
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       />
@@ -979,10 +925,7 @@ const CalendarSection = ({ role, userId }) => {
                         id="location"
                         value={newEvent.location}
                         onChange={(e) =>
-                          setNewEvent({
-                            ...newEvent,
-                            location: e.target.value,
-                          })
+                          setNewEvent({ ...newEvent, location: e.target.value })
                         }
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       />
@@ -990,7 +933,6 @@ const CalendarSection = ({ role, userId }) => {
                   </div>
                 </div>
 
-                {/* Mark as Done */}
                 <MarkAsDone
                   isDone={newEvent.isDone}
                   eventId={newEvent.id}
@@ -1001,7 +943,6 @@ const CalendarSection = ({ role, userId }) => {
                 />
               </div>
 
-              {/* Dialog Footer */}
               <DialogFooter className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
                 {mode === "edit" && role === "admin" && (
                   <Button
@@ -1041,32 +982,16 @@ const CalendarSection = ({ role, userId }) => {
           </Dialog>
         )}
 
-        {/* Temporary Event List for Debugging */}
-        {/* <div className="mt-6 p-4 bg-white shadow rounded">
-          <h2 className="text-lg font-semibold mb-2">Today's Events</h2>
-          {filteredEvents.length > 0 ? (
-            <ul>
-              {filteredEvents.map(event => (
-                <li key={event.id} className="mb-2 p-2 border rounded">
-                  <span className="font-medium">{event.title}</span> - {new Date(event.start).toLocaleTimeString()} to {new Date(event.end).toLocaleTimeString()}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No events scheduled for today.</p>
-          )}
-        </div> */}
-
         {/* Calendar Component */}
         <div className="bg-white shadow-none ">
           <CustomCalendar
-            events={filteredEvents} // Pass filteredEvents
+            events={filteredEvents}
             onEventClick={handleEventClick}
             onDateSelect={handleDateSelect}
             onEventDrop={handleEventDrop}
             role={role}
-            currentMonth={currentMonth} // Pass currentMonth for dynamic fetching
-            onMonthChange={handleMonthChange} // Pass the handler
+            currentMonth={currentMonth}
+            onMonthChange={handleMonthChange}
           />
         </div>
       </Card>
@@ -1075,3 +1000,5 @@ const CalendarSection = ({ role, userId }) => {
 };
 
 export default CalendarSection;
+
+

@@ -386,19 +386,18 @@ const GSTBill = () => {
   return (
     <div className="max-w-4xl mx-auto ">
       <Toaster position="top-right" reverseOrder={false} />
-      {/* Edit Mode Toggle */}
-      <div className="flex space-x-3 px-12">
-      <h2 className="text-2xl font-semibold">
-        {isEditMode ? "Edit Bill" : "Create Bill"}
-      </h2>
-      <Switch
+{/* Edit Mode Toggle */}
+<div className="flex  sm:items-center space-x-4 px-4 sm:px-12">
+  <h2 className="text-lg sm:text-2xl font-semibold">
+    {isEditMode ? "Edit Bill" : "Create Bill"}
+  </h2>
+  <Switch
+  
     checked={isEditMode}
     onCheckedChange={(checked) => {
       if (checked) {
-        // Entering edit mode: fetch existing invoices
         fetchExistingInvoices();
       } else {
-        // Exiting edit mode: reset form fields and selected company/invoice
         setSelectedInvoice(null);
         setInvoiceData({
           invoiceNo: "",
@@ -417,27 +416,21 @@ const GSTBill = () => {
       }
       setIsEditMode(checked);
     }}
-    className="mt-1"
-/>
+    
+  />
 </div>
-      {/* Header Section: Company selection and Invoice No field */}
-      <div className="flex flex-col md:flex-row items-stretch gap-4 px-12 py-4">
+
+{/* Header Section: Company selection and Invoice No field */}
+<div className="flex flex-col md:flex-row items-stretch gap-4 px-4 sm:px-12 py-4">
   {/* Company Select */}
   <div className="flex-1">
-    <Select
-      onValueChange={handleCompanySelect}
-      value={selectedCompany ? selectedCompany.id : undefined}
-    >
-      <SelectTrigger className="w-full">
+    <Select onValueChange={handleCompanySelect} value={selectedCompany ? selectedCompany.id : undefined}>
+      <SelectTrigger className="w-full text-sm sm:text-base">
         <SelectValue placeholder="Choose a company" />
       </SelectTrigger>
       <SelectContent>
         {companies.map((company) => (
-          <SelectItem
-            key={company.id}
-            value={company.id}
-            className="cursor-pointer hover:bg-gray-100"
-          >
+          <SelectItem key={company.id} value={company.id} className="cursor-pointer hover:bg-gray-100">
             <span>{company.company}</span>
           </SelectItem>
         ))}
@@ -449,34 +442,30 @@ const GSTBill = () => {
   <div className="flex-1">
     {isEditMode ? (
       <Select onValueChange={async (value) => await handleInvoiceSelect(value)}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger className="w-full text-sm sm:text-base">
           <SelectValue placeholder="Select an invoice" />
         </SelectTrigger>
         <SelectContent>
           {existingInvoices.map((invoice) => (
-            <SelectItem
-              key={invoice.id}
-              value={invoice.id}
-              className="cursor-pointer hover:bg-gray-100"
-            >
+            <SelectItem key={invoice.id} value={invoice.id} className="cursor-pointer hover:bg-gray-100">
               <span>{invoice.invoice_no}</span>
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
     ) : (
-      <Input value={invoiceData.invoiceNo} readOnly className="w-full" />
+      <Input value={invoiceData.invoiceNo} readOnly className="w-full text-sm sm:text-base" />
     )}
     {invoiceError && (
-      <p className="text-red-500 text-sm mt-1">{invoiceError}</p>
+      <p className="text-red-500 text-xs sm:text-sm mt-1">{invoiceError}</p>
     )}
   </div>
 
   {/* Download Invoice Button */}
-  <div className="flex items-center">
+  <div className="flex justify-center sm:justify-start items-center">
     <Button
       onClick={downloadPDF}
-      className="px-6 py-2 rounded-md"
+      className="px-4 sm:px-6 py-2 rounded-md text-sm sm:text-base"
       disabled={loadingInvoiceNo || invoiceError || !invoiceData.invoiceNo}
     >
       {loadingInvoiceNo ? "Generating Invoice No..." : "Download Invoice"}
@@ -484,8 +473,7 @@ const GSTBill = () => {
   </div>
 </div>
 
-
-      {/* Invoice Content */}
+  
       <div
         id="invoice-content"
         className="w-[210mm] h-[270mm] mx-auto relative bg-white"
@@ -813,7 +801,7 @@ const GSTBill = () => {
           </div>
         </div>
       </div>
-    </div>
+</div>
   );
 };
 

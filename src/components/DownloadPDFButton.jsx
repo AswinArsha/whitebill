@@ -80,7 +80,7 @@ const DownloadPDFButton = ({ data, selectedMonth }) => {
   };
 
   return (
-    <Button onClick={generatePDF} className="ml-4 flex items-center space-x-2">
+    <Button onClick={generatePDF} className="w-full flex items-center space-x-2">
       <Download className="h-4 w-4" />
       <span>Download PDF</span>
     </Button>

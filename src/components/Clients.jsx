@@ -1,17 +1,17 @@
 // Client.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom"; // Import Link for navigation
-import { 
-  Edit, 
-  Trash2, 
-  ChevronRight, 
-  ChevronLeft, 
-  Plus, 
-  Check, 
-  X, 
-  MoreVertical, 
-  ReceiptText, 
-  ClipboardCheck 
+import {
+  Edit,
+  Trash2,
+  ChevronRight,
+  ChevronLeft,
+  Plus,
+  Check,
+  X,
+  MoreVertical,
+  ReceiptText,
+  ClipboardCheck
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { supabase } from '../supabase';
@@ -119,11 +119,11 @@ const Client = ({ role, userId }) => {
       });
       return;
     }
-  
+
     // Ensure status is one of the allowed values
     const validStatuses = ['lead', 'contacted', 'proposal', 'won', 'lost'];
     const clientStatus = validStatuses.includes(client.status) ? client.status : 'lead';
-  
+
     const clientData = {
       client_name: client.client_name,
       name: client.name,
@@ -135,13 +135,13 @@ const Client = ({ role, userId }) => {
       gstin: client.gstin || null,
       order: client.order || 0,
     };
-  
+
     if (isEditMode) {
       const { error } = await supabase
         .from('clients')
         .update(clientData)
         .eq('id', client.id);
-  
+
       if (error) {
         toast.error('Failed to update client.', {
           style: {
@@ -158,7 +158,7 @@ const Client = ({ role, userId }) => {
         .from('clients')
         .insert([clientData])
         .select();
-  
+
       if (error) {
         console.error('Error adding client:', error);
         toast.error('Failed to add client.', {
@@ -174,10 +174,10 @@ const Client = ({ role, userId }) => {
         toast.error('No client data returned after insertion.');
       }
     }
-  
+
     setSelectedClient(null);
   };
-  
+
   const handleDeleteClient = async (id) => {
     const { error } = await supabase.from('clients').delete().eq('id', id);
 
@@ -196,43 +196,43 @@ const Client = ({ role, userId }) => {
 
   const onDragEnd = async (result) => {
     const { source, destination } = result;
-  
+
     if (!destination) return;
-  
+
     const sourceColumnIndex = columns.findIndex(column => column.name === source.droppableId);
     const destinationColumnIndex = columns.findIndex(column => column.name === destination.droppableId);
-  
+
     const sourceColumn = columns[sourceColumnIndex];
     const destinationColumn = columns[destinationColumnIndex];
-  
+
     const sourceItems = Array.from(sourceColumn.clients);
     const [removed] = sourceItems.splice(source.index, 1); // Removed client
-  
+
     if (sourceColumnIndex === destinationColumnIndex) {
       // If it's within the same column
       sourceItems.splice(destination.index, 0, removed);
       const newColumns = [...columns];
       newColumns[sourceColumnIndex].clients = sourceItems;
       setColumns(newColumns);
-  
+
       // Update order in the database
       await updateClientOrder(sourceItems, sourceColumn.name);
     } else {
       // Moving to another column
       const destinationItems = Array.from(destinationColumn.clients);
       destinationItems.splice(destination.index, 0, removed);
-  
+
       const newColumns = [...columns];
       newColumns[sourceColumnIndex].clients = sourceItems;
       newColumns[destinationColumnIndex].clients = destinationItems;
       setColumns(newColumns);
-  
+
       removed.status = destination.droppableId.toLowerCase();
       const { error } = await supabase
         .from('clients')
         .update({ status: removed.status, order: 0 })
         .eq('id', removed.id);
-  
+
       if (error) {
         console.error('Error updating client status:', error);
         toast.error(`Failed to update status of client ${removed.client_name}.`, {
@@ -245,7 +245,7 @@ const Client = ({ role, userId }) => {
         // Show the client name in the success message
         toast.success(`Client ${removed.client_name} moved to ${destination.droppableId}.`);
       }
-  
+
       // Update order in the database for both columns
       await updateClientOrder(sourceItems, sourceColumn.name);
       await updateClientOrder(destinationItems, destinationColumn.name);
@@ -333,21 +333,26 @@ const Client = ({ role, userId }) => {
       {/* Main Card */}
       <Card className="flex flex-col w-full min-h-screen bg-gray-50">
         {/* Search and Add Button */}
-        <div className="flex flex-col md:flex-row items-start mt-4 md:items-center px-4 py-2 space-y-4 md:space-y-0 md:space-x-4">
-          <Input
-            placeholder="Search clients"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow text-sm"
-          />
-          <Button
-            onClick={() => { setIsEditMode(false); setSelectedClient({ status: 'Lead', gstin: '' }); }}
-            className="flex items-center space-x-1 text-sm px-3 py-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Client</span>
-          </Button>
-        </div>
+        <div className="flex flex-col md:flex-row items-center gap-4 p-4">
+  <Input
+    placeholder="Search clients"
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    className="w-full md:w-1/3 px-3 py-2 border rounded"
+  />
+  <Button
+    onClick={() => {
+      setIsEditMode(false);
+      setSelectedClient({ status: 'Lead', gstin: '' });
+    }}
+    className="flex items-center gap-2 px-4 py-2 w-full md:w-auto"
+  >
+    <Plus className="h-4 w-4" />
+    <span>Add Client</span>
+  </Button>
+</div>
+
+
 
         {/* Drag and Drop Columns */}
         <div className="flex flex-grow w-full p-4 space-x-4 overflow-x-auto">
@@ -358,11 +363,9 @@ const Client = ({ role, userId }) => {
                   <div
                     {...provided.droppableProps}
                     ref={provided.innerRef}
-                    className={`flex flex-col ${
-                      expandedColumns.includes(column.name) ? 'w-[224px]' : 'w-[60px]'
-                    } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-3 rounded-lg shadow-sm relative cursor-pointer ${
-                      snapshot.isDraggingOver ? 'bg-blue-100' : ''
-                    }`}
+                    className={`flex flex-col ${expandedColumns.includes(column.name) ? 'w-[224px]' : 'w-[60px]'
+                      } transition-all duration-200 ease-in-out ${column.bgColor} border border-gray-300 p-3 rounded-lg shadow-sm relative cursor-pointer ${snapshot.isDraggingOver ? 'bg-blue-100' : ''
+                      }`}
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-1">
@@ -373,7 +376,7 @@ const Client = ({ role, userId }) => {
                         {expandedColumns.includes(column.name) ? column.name : ''}
                       </h2>
                       <button
-                        className="text-gray-500"
+                        className="text-gray-500 hidden sm:block"
                         onClick={() => toggleColumnExpansion(column.name)}
                         aria-label={expandedColumns.includes(column.name) ? 'Collapse Column' : 'Expand Column'}
                       >
@@ -396,18 +399,18 @@ const Client = ({ role, userId }) => {
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                                 className={`mb-2 ${snapshot.isDragging ? 'opacity-75' : ''}`}
-                                onClick={() => { 
-                                  setClientDetails(client); 
-                                  setIsDetailDialogOpen(true); 
+                                onClick={() => {
+                                  setClientDetails(client);
+                                  setIsDetailDialogOpen(true);
                                 }}
                               >
                                 <Card className="p-2 text-sm rounded-md shadow-none border border-gray-200">
                                   <CardHeader className="flex flex-row justify-between items-center p-0">
                                     <div>
                                       <p className="font-semibold">{client.client_name}</p>
-                                      <p className="text-xs text-gray-600">{client.name}</p>
-                                 
-                                    
+                                      <p className="text-xs hidden sm:block text-gray-600">{client.name}</p>
+
+
                                     </div>
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
@@ -424,10 +427,10 @@ const Client = ({ role, userId }) => {
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end" className="w-32">
                                         <DropdownMenuItem
-                                          onClick={(e) => { 
+                                          onClick={(e) => {
                                             e.stopPropagation(); // Prevent card's onClick
-                                            setIsEditMode(true); 
-                                            setSelectedClient(client); 
+                                            setIsEditMode(true);
+                                            setSelectedClient(client);
                                           }}
                                           className="flex items-center cursor-pointer space-x-2"
                                         >
@@ -435,10 +438,10 @@ const Client = ({ role, userId }) => {
                                           <span>Edit</span>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
-                                          onClick={(e) => { 
+                                          onClick={(e) => {
                                             e.stopPropagation(); // Prevent card's onClick
-                                            setClientToDelete(client); 
-                                            setIsDeleteDialogOpen(true); 
+                                            setClientToDelete(client);
+                                            setIsDeleteDialogOpen(true);
                                           }}
                                           className="flex items-center cursor-pointer space-x-2 text-red-600"
                                         >
@@ -616,7 +619,7 @@ const Client = ({ role, userId }) => {
             <DialogHeader className="mb-2">
               <DialogTitle className="text-xl font-semibold text-gray-700">Client Details</DialogTitle>
             </DialogHeader>
-        
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 mb-6">
               <div>
                 <Label className="text-sm text-gray-500">Client Name</Label>
@@ -647,58 +650,51 @@ const Client = ({ role, userId }) => {
                 <p className="font-medium text-gray-800 whitespace-pre-line">{clientDetails.remarks || ''}</p>
               </div>
             </div>
-        
+
             <div className="mt-4 flex justify-end space-x-4 border-t pt-4">
 
 
 
 
-  <Button
-    asChild
-    variant="outline"
-    size="sm"
-    className="flex items-center justify-center px-4 py-2"
-  >
-    <Link to={`/home/clients/${clientDetails.id}/ledger`} className="flex items-center space-x-2">
-      <ReceiptText className="h-4 w-4" />
-      <span>Ledger</span>
-    </Link>
-  </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="flex items-center justify-center px-4 py-2"
+              >
+                <Link to={`/home/clients/${clientDetails.id}/ledger`} className="flex items-center space-x-2">
+                  <ReceiptText className="h-4 w-4" />
+                  <span>Ledger</span>
+                </Link>
+              </Button>
 
-  <Button
-    variant="outline"
-    size="sm"
-    className="flex items-center justify-center px-4 py-2"
-    onClick={(e) => {
-      e.stopPropagation();
-      toast('Notes functionality coming soon!', { icon: '📝' });
-    }}
-  >
-    <ClipboardCheck className="h-4 w-4 mr-2" />
-    <span>Notes</span>
-  </Button>
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => {
-      setIsDetailDialogOpen(false);
-      setIsEditMode(true);
-      setSelectedClient(clientDetails);
-    }}
-    className="flex items-center justify-center px-4 py-2"
-  >
-    <Edit className="h-4 w-4 mr-2" />
-    <span>Edit</span>
-  </Button>
-  <Button
-    onClick={() => setIsDetailDialogOpen(false)}
-    variant="outline"
-    size="sm"
-    className="flex items-center justify-center px-4 py-2"
-  >
-    <span>Close</span>
-  </Button>
-</div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center justify-center px-4 py-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast('Notes functionality coming soon!', { icon: '📝' });
+                }}
+              >
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                <span>Notes</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsDetailDialogOpen(false);
+                  setIsEditMode(true);
+                  setSelectedClient(clientDetails);
+                }}
+                className="flex items-center justify-center px-4 py-2"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                <span>Edit</span>
+              </Button>
+
+            </div>
 
           </DialogContent>
         </Dialog>

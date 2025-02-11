@@ -7,14 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   Calendar as CalendarIcon,
   Check,
   ChevronsUpDown,
@@ -41,7 +33,16 @@ import { format, isToday } from "date-fns";
 import AlertNotification from "./AlertNotification";
 
 // Import react-hot-toast
-import toast, { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from "react-hot-toast";
+
+// Import Select components for the new "Assign To" select box
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function TaskList({ tasks, toggleTask, deleteTask, editTask, viewTask, isAdmin }) {
   const tasksByDate = tasks.reduce((acc, task) => {
@@ -54,63 +55,77 @@ function TaskList({ tasks, toggleTask, deleteTask, editTask, viewTask, isAdmin }
   }, {});
 
   return (
-    <ScrollArea className="h-[400px] bg-gray-50 w-full rounded-md border p-4">
+    <ScrollArea className="bg-gray-50 w-full rounded-md border p-4 h-[70vh]">
+
       {Object.entries(tasksByDate).map(([date, tasks]) => (
         <div key={date}>
           <h3 className="text-lg font-semibold mb-2">{date}</h3>
           {tasks.map((task) => (
-            <div key={task.id} className="flex items-center space-x-2 mb-4">
-              <Checkbox
-                checked={task.completed}
-                onCheckedChange={() => toggleTask(task.id)}
-              />
-              <div className="grid gap-1.5 flex-grow">
-                <label
-                  className={`text-sm font-medium ${
-                    task.completed ? "line-through text-muted-foreground" : ""
-                  }`}
-                >
-                  {task.name}
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Assigned to: {task.assignedToNames.join(", ")}
-                </p>
-              </div>
-              {task.completed ? (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              ) : (
-                <Circle className="h-5 w-5 text-muted-foreground" />
-              )}
-              {isAdmin ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => editTask(task)}
-                    aria-label="Edit Task"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteTask(task.id)}
-                    aria-label="Delete Task"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => viewTask(task)}
-                  aria-label="View Task"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+         <div key={task.id} className="flex items-center gap-4 mb-4">
+         {/* Checkbox */}
+         <Checkbox
+           checked={task.completed}
+           onCheckedChange={() => toggleTask(task.id)}
+           className="shrink-0"
+         />
+       
+         {/* Task Details (Fixed Width with Flex-Grow for Alignment) */}
+         <div className="flex-grow min-w-0">
+           <label
+             className={`text-sm font-medium break-words ${
+               task.completed ? "line-through text-muted-foreground" : ""
+             }`}
+           >
+             {task.name}
+           </label>
+           <p className="text-xs text-muted-foreground truncate">
+             Assigned to: {task.assignedToNames.join(", ")}
+           </p>
+         </div>
+       
+         {/* Task Status Icon (Check or Circle) */}
+         <div className="shrink-0">
+           {task.completed ? (
+             <CheckCircle2 className="h-5 w-5 text-green-500" />
+           ) : (
+             <Circle className="h-5 w-5 text-muted-foreground" />
+           )}
+         </div>
+       
+         {/* Action Buttons (Fixed Width for Alignment) */}
+         {isAdmin ? (
+           <div className="flex gap-2 shrink-0">
+             <Button
+               variant="ghost"
+               size="icon"
+               onClick={() => editTask(task)}
+               aria-label="Edit Task"
+             >
+               <Edit2 className="h-4 w-4" />
+             </Button>
+             <Button
+               variant="ghost"
+               size="icon"
+               onClick={() => deleteTask(task.id)}
+               aria-label="Delete Task"
+             >
+               <Trash2 className="h-4 w-4 text-red-500" />
+             </Button>
+           </div>
+         ) : (
+           <div className="shrink-0">
+             <Button
+               variant="ghost"
+               size="icon"
+               onClick={() => viewTask(task)}
+               aria-label="View Task"
+             >
+               <Eye className="h-4 w-4" />
+             </Button>
+           </div>
+         )}
+       </div>
+       
           ))}
         </div>
       ))}
@@ -121,16 +136,20 @@ function TaskList({ tasks, toggleTask, deleteTask, editTask, viewTask, isAdmin }
 function TaskDialog({ task, isOpen, addTask, updateTask, onClose, employees, isAdmin }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [assignedUsers, setAssignedUsers] = useState([]);
-  const [comboBoxOpen, setComboBoxOpen] = useState(false);
+  // For simplicity, we now store a single selected employee ID
+  const [assignedUser, setAssignedUser] = useState(null);
   const [date, setDate] = useState(new Date());
 
-  // Synchronize state with task prop
+  // Synchronize state with task prop (if editing an existing task)
   useEffect(() => {
     if (task) {
       setName(task.name || "");
       setDescription(task.description || "");
-      setAssignedUsers(task.assigned_users || []);
+      setAssignedUser(
+        task.assigned_users && task.assigned_users.length > 0
+          ? task.assigned_users[0]
+          : null
+      );
       setDate(task.task_date ? new Date(task.task_date) : new Date());
     }
   }, [task]);
@@ -140,38 +159,31 @@ function TaskDialog({ task, isOpen, addTask, updateTask, onClose, employees, isA
     if (!isOpen) {
       setName("");
       setDescription("");
-      setAssignedUsers([]);
+      setAssignedUser(null);
       setDate(new Date());
     }
   }, [isOpen]);
 
   const handleSubmit = () => {
-    // Validation: Ensure required fields are filled
-    if (name && date && (isAdmin ? assignedUsers.length > 0 : true)) {
-      const taskData = { name, description, assigned_users: assignedUsers, date };
+    // Validation: Ensure required fields are filled (if admin, an employee must be selected)
+    if (name && date && (isAdmin ? assignedUser : true)) {
+      const taskData = {
+        name,
+        description,
+        // Wrap the single selected employee in an array
+        assigned_users: isAdmin && assignedUser ? [assignedUser] : [],
+        date,
+      };
       if (task) {
         updateTask({ ...task, ...taskData });
       } else {
         addTask(taskData);
       }
       onClose();
-      // Display success toast
-     
     } else {
-      // Display error toast
       toast.error("Please fill in all required fields.");
     }
   };
-
-  const toggleUserSelection = (userId) => {
-    setAssignedUsers((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
-    );
-  };
-
-  const selectedEmployeeNames = employees
-    .filter((employee) => assignedUsers.includes(employee.id))
-    .map((employee) => employee.name);
 
   return (
     <DialogContent className="sm:max-w-[425px]">
@@ -220,47 +232,21 @@ function TaskDialog({ task, isOpen, addTask, updateTask, onClose, employees, isA
         {isAdmin && (
           <>
             <Label htmlFor="employee">Assign To</Label>
-            <Popover open={comboBoxOpen} onOpenChange={setComboBoxOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={comboBoxOpen}
-                  className="w-full justify-between"
-                  aria-label="Assign To"
-                >
-                  {selectedEmployeeNames.length > 0
-                    ? selectedEmployeeNames.join(", ")
-                    : "Select employees..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput placeholder="Search employee..." />
-                  <CommandList>
-                    <CommandEmpty>No employee found.</CommandEmpty>
-                    <CommandGroup>
-                      {employees.map((employee) => (
-                        <CommandItem
-                          key={employee.id}
-                          onSelect={() => toggleUserSelection(employee.id)}
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 ${
-                              assignedUsers.includes(employee.id)
-                                ? "opacity-100"
-                                : "opacity-0"
-                            }`}
-                          />
-                          {employee.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <Select
+              value={assignedUser || ""}
+              onValueChange={(value) => setAssignedUser(value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select employee" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map((employee) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </>
         )}
       </div>
@@ -337,7 +323,7 @@ function TaskViewDialog({ task, onClose }) {
   );
 }
 
-export  function TaskSection({ role, userId, onTasksRead }) {
+export function TaskSection({ role, userId, onTasksRead }) {
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [filter, setFilter] = useState("all");
@@ -613,7 +599,7 @@ export  function TaskSection({ role, userId, onTasksRead }) {
           <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
             <DialogTrigger asChild>
               <Button
-                className="flex items-center space-x-2"
+                className="flex items-center mb-2 space-x-2"
                 onClick={() => {
                   setEditingTask(null);
                 }} // Reset editingTask when adding new task

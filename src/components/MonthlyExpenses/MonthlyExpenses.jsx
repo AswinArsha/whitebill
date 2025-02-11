@@ -34,7 +34,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
-
+import { Switch } from "@/components/ui/switch";
 import AlertNotification from "../AlertNotification";
 
 const TRANSACTION_CATEGORIES = [
@@ -285,101 +285,101 @@ const MonthlyExpenses = ({ role, userId }) => {
       </div>
 
       <Card className="shadow-none p-4 mb-4 bg-gray-50">
-        <div className="flex justify-between items-center mb-4 space-x-2">
+  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 space-y-4 md:space-y-0 md:space-x-4">
+    <Button
+      onClick={() => {
+        setCurrentTransaction(null);
+        setIsModalOpen(true);
+      }}
+      className="flex items-center space-x-2 w-full md:w-auto"
+    >
+      <Plus className="h-5 w-5" />
+      <span>Add Transaction</span>
+    </Button>
+    <Input
+      placeholder="Search transactions..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      onKeyUp={handleSearch}
+      className="w-full md:flex-grow"
+    />
+  </div>
+
+  <div className="flex flex-col lg:flex-row justify-between items-start space-y-4 lg:space-y-0 lg:space-x-4 w-full">
+    <div className="flex flex-col w-full lg:w-auto">
+      <Label htmlFor="dateRange" className="mb-1">Date Range</Label>
+      <Popover>
+        <PopoverTrigger asChild>
           <Button
-            onClick={() => {
-              setCurrentTransaction(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center space-x-2"
+            id="dateRange"
+            variant={"outline"}
+            className={cn(
+              "w-full lg:w-[300px] justify-start text-left font-normal",
+              !dateRange && "text-muted-foreground"
+            )}
           >
-            <Plus className="h-5 w-5" />
-            <span>Add Transaction</span> 
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {dateRange?.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(dateRange.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
           </Button>
-          <Input
-            placeholder="Search transactions..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyUp={handleSearch}
-            className="flex-grow"
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            initialFocus
+            mode="range"
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
           />
-        </div>
+        </PopoverContent>
+      </Popover>
+    </div>
 
-        <div className="mb-4 w-full flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0 lg:space-x-4">
-          <div className="flex flex-col w-full lg:w-auto">
-            <Label htmlFor="dateRange" className="mb-1">Date Range</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="dateRange"
-                  variant={"outline"}
-                  className={cn(
-                    "w-full lg:w-[300px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+    <div className="flex flex-col w-full ">
+      <Label htmlFor="filterCategory" className="mb-1">Category</Label>
+      <Select value={filterCategory} onValueChange={setFilterCategory}>
+        <SelectTrigger id="filterCategory" className="w-full">
+          <SelectValue placeholder="All Categories" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          {TRANSACTION_CATEGORIES.map((category) => (
+            <SelectItem key={category.value} value={category.value}>
+              {category.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
 
-          <div className="flex flex-col w-full ">
-            <Label htmlFor="filterCategory" className="mb-1">Category</Label>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger id="filterCategory">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {TRANSACTION_CATEGORIES.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="flex flex-col w-full ">
+      <Label htmlFor="filterType" className="mb-1">Type</Label>
+      <Select value={filterType} onValueChange={setFilterType}>
+        <SelectTrigger id="filterType" className="w-full">
+          <SelectValue placeholder="All Types" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          {TRANSACTION_TYPES.map((type) => (
+            <SelectItem key={type.value} value={type.value}>
+              {type.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+</Card>
 
-          <div className="flex flex-col w-full ">
-            <Label htmlFor="filterType" className="mb-1">Type</Label>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger id="filterType">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {TRANSACTION_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
 
       <SummaryCard summary={summary} />
 

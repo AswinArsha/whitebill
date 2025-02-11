@@ -1,5 +1,3 @@
-// Home.jsx
-
 import React, { useState, useEffect } from "react";
 import { Link, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,14 +10,14 @@ import {
   Users,
   AlarmClock,
   CheckCircle,
-  EllipsisVertical,
+  Menu,
   ClipboardCheck,
 } from "lucide-react";
 import Billing from "./components/Billing";
 import CalendarSection from "./components/CalendarSection";
 import MonthlyExpenses from "./components/MonthlyExpenses/MonthlyExpenses";
 import Clients from "./components/Clients";
-import Ledger from "./components/Ledger"; // Import the Ledger component
+import Ledger from "./components/Ledger";
 import Remainders from "./components/Remainders";
 import Attendance from "./components/Attendance";
 import IndividualAttendanceReport from "./components/IndividualAttendanceReport";
@@ -28,13 +26,13 @@ import { supabase } from "./supabase";
 import AlertNotification from "./components/AlertNotification";
 import ProfileDropdown from "./components/ProfileDropdown";
 import NotificationDropdown from "./components/NotificationDropdown";
+import MobileNavigation from "./MobileNavigation"; 
 
 const Home = ({ role, userId, isAuthenticated }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isTablet, setIsTablet] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadTaskCount, setUnreadTaskCount] = useState(0);
 
   useEffect(() => {
@@ -58,15 +56,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
     return () => {
       supabase.removeAllChannels();
     };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    console.log('Home component mounted');
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('userId:', userId);
-    if (isAuthenticated) {
-      fetchUnreadTaskCount();
-    }
   }, [isAuthenticated]);
 
   const fetchUnreadTaskCount = async () => {
@@ -110,39 +99,9 @@ const Home = ({ role, userId, isAuthenticated }) => {
     if (isTablet) setIsCollapsed(!isCollapsed);
   };
 
-  const handleHamburgerClick = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const handleIconClick = (path) => {
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  };
-
-  const handleOutsideClick = (e) => {
-    if (isMobile && sidebarOpen) {
-      const sidebar = document.getElementById("sidebar");
-      if (sidebar && !sidebar.contains(e.target)) {
-        setSidebarOpen(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (isMobile) {
-      document.addEventListener("touchstart", handleOutsideClick);
-    }
-    return () => {
-      if (isMobile) {
-        document.removeEventListener("touchstart", handleOutsideClick);
-      }
-    };
-  }, [sidebarOpen, isMobile]);
-
   const sidebarVariants = {
-    expanded: { width: isMobile ? 250 : 180 },
-    collapsed: { width: isMobile ? 80 : 80 },
+    expanded: { width: 180 },
+    collapsed: { width: 80 },
   };
 
   const textVariants = {
@@ -165,7 +124,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
 
   const getCurrentSection = () => {
     const path = location.pathname;
-    // Find the matching route name
     for (const route in routeNameMap) {
       const regex = new RegExp(`^${route.replace(/:\w+/g, '\\w+')}$`);
       if (regex.test(path)) {
@@ -204,66 +162,68 @@ const Home = ({ role, userId, isAuthenticated }) => {
 
   return (
     <div className="flex h-screen relative">
+      {/* Desktop/Tablet Sidebar */}
+      {!isMobile && (
+        <motion.div
+          className="h-full bg-white shadow-md flex flex-col justify-between fixed z-20"
+          animate={isCollapsed ? "collapsed" : "expanded"}
+          variants={sidebarVariants}
+          initial="collapsed"
+          transition={{ duration: transitionSpeed }}
+          onMouseEnter={!isTablet ? () => setIsCollapsed(false) : undefined}
+          onMouseLeave={!isTablet ? () => setIsCollapsed(true) : undefined}
+        >
+          <Card className="p-4 flex flex-col h-full">
+            <nav className="space-y-4">
+              {navItems.map((item) => (
+                <Button
+                  key={item.path}
+                  asChild
+                  variant="ghost"
+                  className={`w-full mt-14 justify-start ${
+                    location.pathname === `/home/${item.path}` || location.pathname.startsWith(`/home/${item.path}/`)
+                      ? "bg-gray-200"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <Link to={`/home/${item.path}`} className="w-full text-left flex items-center space-x-2">
+                    {item.icon}
+                    <AnimatePresence>
+                      {!isCollapsed && (
+                        <motion.span
+                          initial="hidden"
+                          animate="visible"
+                          exit="hidden"
+                          variants={textVariants}
+                          transition={{ duration: transitionSpeed }}
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </Link>
+                </Button>
+              ))}
+            </nav>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Mobile Navigation */}
       {isMobile && (
-        <div className="fixed top-5 z-30">
-          <Button variant="outline" className="p-0 rounded-l-none" onClick={handleHamburgerClick}>
-            <EllipsisVertical />
-          </Button>
-        </div>
+        <MobileNavigation
+          role={role}
+          unreadTaskCount={unreadTaskCount}
+        />
       )}
 
-      {isMobile && sidebarOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-10" onClick={() => setSidebarOpen(false)}></div>
-      )}
-
-      <motion.div
-        id="sidebar"
-        className={`h-full bg-white shadow-md flex flex-col justify-between absolute z-20 ${
-          isMobile && !sidebarOpen ? "hidden" : ""
+      {/* Main Content */}
+      <div 
+        className={`flex-1 p-6 overflow-auto ${
+          isMobile ? "pb-20" : "ml-20"
         }`}
-        animate={isCollapsed ? "collapsed" : "expanded"}
-        variants={sidebarVariants}
-        initial="collapsed"
-        transition={{ duration: transitionSpeed }}
-        onMouseEnter={!isTablet && !isMobile ? () => setIsCollapsed(false) : undefined}
-        onMouseLeave={!isTablet && !isMobile ? () => setIsCollapsed(true) : undefined}
       >
-        <Card className="p-4 flex flex-col h-full">
-          <nav className="space-y-4">
-            {navItems.map((item) => (
-              <Button
-                key={item.path}
-                asChild
-                variant="ghost"
-                className={`w-full mt-14 justify-start ${
-                  location.pathname === `/home/${item.path}` || location.pathname.startsWith(`/home/${item.path}/`) ? "bg-gray-200" : "hover:bg-gray-100"
-                }`}
-                onClick={() => handleIconClick(item.path)}
-              >
-                <Link to={`/home/${item.path}`} className="w-full text-left flex items-center space-x-2">
-                  {item.icon}
-                  <AnimatePresence>
-                    {!isCollapsed && !isMobile && (
-                      <motion.span
-                        initial="hidden"
-                        animate="visible"
-                        exit="hidden"
-                        variants={textVariants}
-                        transition={{ duration: transitionSpeed }}
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </Link>
-              </Button>
-            ))}
-          </nav>
-        </Card>
-      </motion.div>
-
-      <div className={`flex-1 p-6 overflow-auto ${isMobile ? "ml-0 " : "ml-20"}`}>
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-0 md:mb-2">
           <h1 className="text-2xl font-bold -mb-2 ml-2 md:-ml-0">{getCurrentSection()}</h1>
           <div className="flex space-x-6">
             <NotificationDropdown />
@@ -283,7 +243,6 @@ const Home = ({ role, userId, isAuthenticated }) => {
             path="tasks"
             element={<TaskSection role={role} userId={userId} onTasksRead={fetchUnreadTaskCount} />}
           />
-          {/* Ledger Route */}
           <Route path="clients/:clientId/ledger" element={<Ledger role={role} userId={userId} />} />
           <Route index element={<Navigate to="calendar" />} />
         </Routes>

@@ -64,7 +64,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toWords } from 'number-to-words';
 import InvoicePrintComponent from "./InvoicePrintComponent";
-import GSTInvoice from "./GSTInvoice";
+
 import { useReactToPrint } from 'react-to-print';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "../supabase";
@@ -95,6 +95,56 @@ const getCategoryColor = (category, isDone) => {
     default: return "#6c757d";  
   }
 };
+const BillingDateRangePicker = ({ dateRange, setDateRange }) => {
+  return (
+    <div className="mb-6">
+      <Label
+        htmlFor="dateRange"
+        className="block text-sm font-medium text-gray-700 mb-2"
+      >
+        Select Date Range
+      </Label>
+      <div className={cn("grid gap-2")}>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              id="dateRange"
+              variant="outline"
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !dateRange?.from && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateRange?.from ? (
+                dateRange.to ? (
+                  <>
+                    {format(dateRange.from, "LLL dd, y")} -{" "}
+                    {format(dateRange.to, "LLL dd, y")}
+                  </>
+                ) : (
+                  format(dateRange.from, "LLL dd, y")
+                )
+              ) : (
+                <span>Pick a date range</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              initialFocus
+              mode="range"
+              defaultMonth={dateRange?.from || new Date()}
+              selected={dateRange}
+              onSelect={setDateRange}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+};
 
 const Billing = ({ role, userId }) => {
   // State variables
@@ -110,12 +160,14 @@ const Billing = ({ role, userId }) => {
   const [billHistory, setBillHistory] = useState([]);
   const [clientDetails, setClientDetails] = useState("");
   const [manualTotal, setManualTotal] = useState(0);
-  const [dateRange, setDateRange] = useState({ from: null, to: null });
   const [searchTerm, setSearchTerm] = useState("");
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [isComboBoxOpen, setIsComboBoxOpen] = useState(false);
-
+  const [dateRange, setDateRange] = useState({
+    from: new Date(),
+    to: addDays(new Date(), 7),
+  });
   // Dialog states
   const [isPaymentModeOpen, setIsPaymentModeOpen] = useState(false);
   const [currentBillId, setCurrentBillId] = useState(null);
@@ -395,54 +447,7 @@ const Billing = ({ role, userId }) => {
                 <CardTitle className="text-2xl">Enter Bill Details</CardTitle>
               </CardHeader>
               <CardContent className="px-6">
-              <div className="mb-6">
-  <Label
-    htmlFor="dateRange"
-    className="block text-sm font-medium text-gray-700 mb-2"
-  >
-    Select Date Range
-  </Label>
-  <div className={cn("grid gap-2")}>
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          id="dateRange"
-          variant="outline"
-          className={cn(
-            "w-full justify-start text-left font-normal",
-            !dateRange.from && "text-gray-500"
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {dateRange?.from ? (
-            dateRange.to ? (
-              <>
-                {format(dateRange.from, "LLL dd, y")} -{" "}
-                {format(dateRange.to, "LLL dd, y")}
-              </>
-            ) : (
-              format(dateRange.from, "LLL dd, y")
-            )
-          ) : (
-            <span>Pick a date range</span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          initialFocus
-          mode="range"
-          defaultMonth={dateRange?.from || new Date()}
-          selected={dateRange}
-          onSelect={setDateRange}
-          numberOfMonths={2}
-        />
-      </PopoverContent>
-    </Popover>
-  </div>
-</div>
-
-
+              <BillingDateRangePicker dateRange={dateRange} setDateRange={setDateRange} />
             {/* Client Selection */}
             <div className="mb-6">
               <Label
@@ -659,7 +664,7 @@ const Billing = ({ role, userId }) => {
             </Card>
 
             {/* Bill History Section */}
-            <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden">
+            <Card className="bg-gray-50 md:mb-0 mb-20 shadow-none rounded-lg ">
               <CardHeader className="text-black">
                 <CardTitle className="text-2xl">Bill History</CardTitle>
               </CardHeader>
@@ -673,7 +678,7 @@ const Billing = ({ role, userId }) => {
                 placeholder="Search by client details..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
 
