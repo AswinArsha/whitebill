@@ -27,6 +27,7 @@ import AlertNotification from "./components/AlertNotification";
 import ProfileDropdown from "./components/ProfileDropdown";
 import NotificationDropdown from "./components/NotificationDropdown";
 import MobileNavigation from "./MobileNavigation"; 
+import Notes from "./components/Notes";
 
 const Home = ({ role, userId, isAuthenticated }) => {
   const location = useLocation();
@@ -117,6 +118,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
     "/home/monthly-expenses": "Expenses & Income",
     "/home/clients": "Clients",
     "/home/clients/:clientId/ledger": "Ledger",
+    "/home/clients/:clientId/notes": "Client Notes", // Add this line
     "/home/remainders": "Remainders",
     "/home/attendance": "Attendance",
     "/home/tasks": "Task Manager",
@@ -244,6 +246,7 @@ const Home = ({ role, userId, isAuthenticated }) => {
             element={<TaskSection role={role} userId={userId} onTasksRead={fetchUnreadTaskCount} />}
           />
           <Route path="clients/:clientId/ledger" element={<Ledger role={role} userId={userId} />} />
+          <Route path="clients/:clientId/notes" element={<Notes role={role} userId={userId} />} />
           <Route index element={<Navigate to="calendar" />} />
         </Routes>
       </div>

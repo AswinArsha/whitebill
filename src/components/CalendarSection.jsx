@@ -41,9 +41,6 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 // Import the new Category Manager dialog component
 import CategoryManagerDialog from "./CategoryManagerDialog";
 
-// NOTE: We no longer use hard-coded CATEGORIES and FILTER_CATEGORIES.
-// Instead, we’ll load them from the database.
-
 const CalendarSection = ({ role, userId }) => {
   // -----------------------
   // State variables
@@ -90,6 +87,7 @@ const CalendarSection = ({ role, userId }) => {
     return cat ? cat.color : "#6c757d";
   };
 
+  // Helper: Format category label (convert underscores to spaces and capitalize)
   const formatCategoryLabel = (label) => {
     if (!label) return "";
     return label
@@ -97,7 +95,6 @@ const CalendarSection = ({ role, userId }) => {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
-
 
   // -----------------------
   // Fetch categories from Supabase
@@ -209,7 +206,7 @@ const CalendarSection = ({ role, userId }) => {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
-  }, [role, userId, currentMonth, categories]); // include categories in dependency
+  }, [role, userId, currentMonth, categories]);
 
   useEffect(() => {
     fetchEvents();
@@ -280,7 +277,7 @@ const CalendarSection = ({ role, userId }) => {
   };
 
   // -----------------------
-  // Validate event form (skip in view mode)
+  // Validate event form (skip in view )
   // -----------------------
   const validateEvent = () => {
     let isValid = true;
@@ -320,23 +317,23 @@ const CalendarSection = ({ role, userId }) => {
           currentEvents.map((event) =>
             event.id === newEvent.id
               ? {
-                ...event,
-                isDone: newEvent.isDone,
-                backgroundColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
-                borderColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
-                extendedProps: {
-                  ...event.extendedProps,
+                  ...event,
                   isDone: newEvent.isDone,
-                },
-              }
+                  backgroundColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
+                  borderColor: getCategoryColor(event.extendedProps.category, newEvent.isDone),
+                  extendedProps: {
+                    ...event.extendedProps,
+                    isDone: newEvent.isDone,
+                  },
+                }
               : event
           )
         );
         setIsModalOpen(false);
         toast.success(
-          newEvent.isDone
-            ? "Task completed successfully! 🎉"
-            : "Task marked as incomplete.",
+          newEvent.isDone 
+            ? "Task completed successfully! 🎉" 
+            : "Task marked as incomplete.", 
           { duration: 3000 }
         );
       }
@@ -375,17 +372,17 @@ const CalendarSection = ({ role, userId }) => {
             currentEvents.map((event) =>
               event.id === newEvent.id
                 ? {
-                  ...event,
-                  ...eventToSubmit,
-                  backgroundColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
-                  borderColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
-                  extendedProps: {
-                    ...event.extendedProps,
-                    isDone: eventToSubmit.is_done,
-                    category: eventToSubmit.category,
-                    assignedUserIds: eventToSubmit.assigned_user_ids,
-                  },
-                }
+                    ...event,
+                    ...eventToSubmit,
+                    backgroundColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
+                    borderColor: getCategoryColor(eventToSubmit.category, eventToSubmit.is_done),
+                    extendedProps: {
+                      ...event.extendedProps,
+                      isDone: eventToSubmit.is_done,
+                      category: eventToSubmit.category,
+                      assignedUserIds: eventToSubmit.assigned_user_ids,
+                    },
+                  }
                 : event
             )
           );
@@ -474,13 +471,13 @@ const CalendarSection = ({ role, userId }) => {
         currentEvents.map((event) =>
           event.id === dropInfo.event.id
             ? {
-              ...event,
-              start: updatedEvent.start_time,
-              end: updatedEvent.end_time,
-              allDay: updatedEvent.all_day,
-              backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
-              borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
-            }
+                ...event,
+                start: updatedEvent.start_time,
+                end: updatedEvent.end_time,
+                allDay: updatedEvent.all_day,
+                backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+                borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+              }
             : event
         )
       );
@@ -514,18 +511,18 @@ const CalendarSection = ({ role, userId }) => {
         currentEvents.map((event) =>
           event.id === updatedEvent.id
             ? {
-              ...event,
-              start: updatedEvent.start_time,
-              end: updatedEvent.end_time,
-              allDay: updatedEvent.all_day,
-              backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
-              borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
-              extendedProps: {
-                ...event.extendedProps,
-                start_time: updatedEvent.start_time,
-                end_time: updatedEvent.end_time,
-              },
-            }
+                ...event,
+                start: updatedEvent.start_time,
+                end: updatedEvent.end_time,
+                allDay: updatedEvent.all_day,
+                backgroundColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+                borderColor: getCategoryColor(event.extendedProps.category, event.extendedProps.isDone),
+                extendedProps: {
+                  ...event.extendedProps,
+                  start_time: updatedEvent.start_time,
+                  end_time: updatedEvent.end_time,
+                },
+              }
             : event
         )
       );
@@ -579,7 +576,6 @@ const CalendarSection = ({ role, userId }) => {
   // -----------------------
   // Client-side Filtering
   // -----------------------
-  // Build filterCategories dynamically using the fetched categories.
   const filterCategories = useMemo(() => {
     return [
       { value: "all", label: "All Categories" },
@@ -589,7 +585,6 @@ const CalendarSection = ({ role, userId }) => {
       }))
     ];
   }, [categories]);
-
 
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
@@ -672,18 +667,14 @@ const CalendarSection = ({ role, userId }) => {
               ))}
               <Button
                 variant="outline"
-                className="flex items-center gap-2 px-4 py-2  w-full"
+                className="flex items-center gap-2 px-4 py-2 w-full"
                 onClick={() => setIsCategoryManagerOpen(true)}
               >
                 <Plus className="w-5 h-5 text-gray-700" />
                 <span className="text-gray-800 font-medium">Add Category</span>
               </Button>
-
             </SelectContent>
-
           </Select>
-
-
           <Select
             value={filterClientName || "all"}
             onValueChange={(value) => setFilterClientName(value === "all" ? "" : value)}
@@ -700,7 +691,7 @@ const CalendarSection = ({ role, userId }) => {
           </Select>
           {role === "admin" && (
             <Select value={filterAssignedUser} onValueChange={setFilterAssignedUser}>
-              <SelectTrigger className="w-full  px-3 py-2 text-sm">
+              <SelectTrigger className="w-full px-3 py-2 text-sm">
                 <SelectValue placeholder="All Assigned Users" />
               </SelectTrigger>
               <SelectContent className="max-h-80 overflow-y-auto">
@@ -732,8 +723,10 @@ const CalendarSection = ({ role, userId }) => {
                   {mode === "edit" ? "Edit Event" : mode === "add" ? "Add New Event" : "View Event"}
                 </DialogTitle>
                 <DialogDescription className="text-gray-600 text-sm hidden sm:block sm:text-base">
-                  {mode === "edit" ? "Update the details of the event."
-                    : mode === "add" ? "Fill in the details of the new event."
+                  {mode === "edit"
+                    ? "Update the details of the event."
+                    : mode === "add"
+                      ? "Fill in the details of the new event."
                       : "View the details of the event and mark it as done."}
                 </DialogDescription>
               </DialogHeader>
@@ -814,7 +807,6 @@ const CalendarSection = ({ role, userId }) => {
                         readOnly
                         className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:ring-0 cursor-not-allowed"
                       />
-
                     ) : (
                       <div className="flex">
                         <Select
@@ -835,9 +827,7 @@ const CalendarSection = ({ role, userId }) => {
                               </SelectItem>
                             ))}
                           </SelectContent>
-
                         </Select>
-
                       </div>
                     )}
                     {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category}</p>}
@@ -944,6 +934,15 @@ const CalendarSection = ({ role, userId }) => {
               </div>
 
               <DialogFooter className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
+                {/* New Close Button */}
+                <Button
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                  className="flex items-center space-x-2 w-full sm:w-auto"
+                  type="button"
+                >
+                  <span>Close</span>
+                </Button>
                 {mode === "edit" && role === "admin" && (
                   <Button
                     variant="destructive"
@@ -1000,5 +999,3 @@ const CalendarSection = ({ role, userId }) => {
 };
 
 export default CalendarSection;
-
-

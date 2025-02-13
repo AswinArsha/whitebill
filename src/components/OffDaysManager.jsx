@@ -1,7 +1,7 @@
 // OffDaysManager.jsx
 import React, { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
-import { Calendar } from 'lucide-react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 import { supabase } from '../supabase';
 import { toast } from 'react-hot-toast';
 
@@ -25,7 +25,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -34,6 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+// Import shadcn calendar & popover components
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const WEEKDAYS = [
   { value: 0, label: 'Sunday' },
@@ -49,7 +56,7 @@ const OffDaysManager = ({ organizationId, userId, userRole }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isRepeat, setIsRepeat] = useState(true);
   const [selectedWeekday, setSelectedWeekday] = useState(0);
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(null); // Will store a Date object when using specific dates
   const [offDays, setOffDays] = useState([]);
 
   useEffect(() => {
@@ -79,32 +86,38 @@ const OffDaysManager = ({ organizationId, userId, userRole }) => {
       toast.error('Unauthorized action');
       return;
     }
-
+  
+    if (!isRepeat && !selectedDate) {
+      toast.error('Please select a date');
+      return;
+    }
+  
     try {
       const newOffDay = {
         organization_id: organizationId,
         day_type: isRepeat ? 'weekly' : 'specific',
         weekday: isRepeat ? selectedWeekday : null,
-        specific_date: !isRepeat ? selectedDate : null,
+        // Use format to store the date as a string without time zone conversion
+        specific_date: !isRepeat && selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null,
         is_active: true,
-        created_by: userId
+        created_by: userId,
       };
-
+  
       const { error } = await supabase
         .from('off_days')
         .insert([newOffDay]);
-
+  
       if (error) throw error;
-
+  
       toast.success('Off day added successfully!');
       setIsOpen(false);
       fetchOffDays();
+      setSelectedDate(null); // Reset date selection if needed
     } catch (error) {
       console.error('Error adding off day:', error);
       toast.error('Failed to add off day');
     }
   };
-
   const handleDelete = async (id) => {
     if (!organizationId || userRole !== 'admin') {
       toast.error('Unauthorized action');
@@ -131,8 +144,8 @@ const OffDaysManager = ({ organizationId, userId, userRole }) => {
     <div>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
-          <Button className="w-full" variant="outline" >
-            <Calendar className="h-4 w-4 mr-2" />
+          <Button className="w-full" variant="outline">
+            <CalendarIcon className="h-4 w-4 mr-2" />
             Manage Off Days
           </Button>
         </DialogTrigger>
@@ -176,50 +189,63 @@ const OffDaysManager = ({ organizationId, userId, userRole }) => {
             ) : (
               <div className="grid gap-2">
                 <Label>Select Date</Label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full text-left">
+                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
           </div>
-   {/* Display current off days */}
-   <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Day/Date</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {offDays.map((offDay) => (
-              <TableRow key={offDay.id}>
-                <TableCell>
-                  {offDay.day_type === 'weekly' ? 'Weekly' : 'Specific Date'}
-                </TableCell>
-                <TableCell>
-                  {offDay.day_type === 'weekly'
-                    ? WEEKDAYS.find((day) => day.value === offDay.weekday)?.label
-                    : format(parseISO(offDay.specific_date), 'dd MMM yyyy')}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-100"
-                    onClick={() => handleDelete(offDay.id)}
-                  >
-                    Remove
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+
+          {/* Display current off days */}
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Day/Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {offDays.map((offDay) => (
+                  <TableRow key={offDay.id}>
+                    <TableCell>
+                      {offDay.day_type === 'weekly' ? 'Weekly' : 'Specific Date'}
+                    </TableCell>
+                    <TableCell>
+                      {offDay.day_type === 'weekly'
+                        ? WEEKDAYS.find((day) => day.value === offDay.weekday)?.label
+                        : format(parseISO(offDay.specific_date), 'dd MMM yyyy')}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-100"
+                        onClick={() => handleDelete(offDay.id)}
+                      >
+                        Remove
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
@@ -228,8 +254,6 @@ const OffDaysManager = ({ organizationId, userId, userRole }) => {
           </div>
         </DialogContent>
       </Dialog>
-
-   
     </div>
   );
 };

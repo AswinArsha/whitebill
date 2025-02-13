@@ -1,9 +1,8 @@
-// App.jsx
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
 import Login from './Login';
 import Home from './Home';
-import AdminHome from './AdminHome';  // Import the AdminHome component
+import AdminHome from './AdminHome';
 import ProtectedRoute from './ProtectedRoute';
 import Unauthorized from './Unauthorized';
 import { Loader } from "lucide-react";
@@ -19,7 +18,7 @@ function App() {
     const savedUserId = localStorage.getItem('userId');
     if (savedRole && savedUserId) {
       setRole(savedRole);
-      setUserId(savedUserId); // Ensure userId is stored as string
+      setUserId(savedUserId);
       setIsAuthenticated(true);
     }
     setLoading(false);
@@ -33,7 +32,6 @@ function App() {
     );
   }
 
-  // Helper function to determine which home component to render
   const getHomeComponent = (role) => {
     if (role === 'superadmin') {
       return <AdminHome role={role} userId={userId} isAuthenticated={isAuthenticated} />;
@@ -42,55 +40,53 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
-        {/* Public route */}
-        <Route
-          path="/"
-          element={
-            <Login
-              setRole={setRole}
-              setIsAuthenticated={setIsAuthenticated}
-              setUserId={setUserId}
-            />
-          }
-        />
+    <Routes>
+      {/* Public route */}
+      <Route
+        path="/"
+        element={
+          <Login
+            setRole={setRole}
+            setIsAuthenticated={setIsAuthenticated}
+            setUserId={setUserId}
+          />
+        }
+      />
 
-        {/* Protected routes */}
-        <Route
-          path="/home/*"
-          element={
-            <ProtectedRoute
-              isAuthenticated={isAuthenticated}
-              role={role}
-              requiredRole="user"
-            >
-              {getHomeComponent(role)}
-            </ProtectedRoute>
-          }
-        />
+      {/* Protected routes */}
+      <Route
+        path="/home/*"
+        element={
+          <ProtectedRoute
+            isAuthenticated={isAuthenticated}
+            role={role}
+            requiredRole="user"
+          >
+            {getHomeComponent(role)}
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Admin specific route */}
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute
-              isAuthenticated={isAuthenticated}
-              role={role}
-              requiredRole="superadmin"
-            >
-              <AdminHome role={role} userId={userId} isAuthenticated={isAuthenticated} />
-            </ProtectedRoute>
-          }
-        />
+      {/* Admin specific route */}
+      <Route
+        path="/admin/*"
+        element={
+          <ProtectedRoute
+            isAuthenticated={isAuthenticated}
+            role={role}
+            requiredRole="superadmin"
+          >
+            <AdminHome role={role} userId={userId} isAuthenticated={isAuthenticated} />
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Unauthorized Access Route */}
-        <Route path="/unauthorized" element={<Unauthorized />} />
+      {/* Unauthorized Access Route */}
+      <Route path="/unauthorized" element={<Unauthorized />} />
 
-        {/* Fallback to login page if route doesn't match */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+      {/* Fallback to login page if route doesn't match */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

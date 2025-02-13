@@ -11,7 +11,8 @@ import {
   X,
   MoreVertical,
   ReceiptText,
-  ClipboardCheck
+  ClipboardCheck,
+  FileText,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { supabase } from '../supabase';
@@ -652,10 +653,6 @@ const Client = ({ role, userId }) => {
             </div>
 
             <div className="mt-4 flex justify-end space-x-4 border-t pt-4">
-
-
-
-
               <Button
                 asChild
                 variant="outline"
@@ -669,17 +666,20 @@ const Client = ({ role, userId }) => {
               </Button>
 
               <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center justify-center px-4 py-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toast('Notes functionality coming soon!', { icon: '📝' });
-                }}
-              >
-                <ClipboardCheck className="h-4 w-4 mr-2" />
-                <span>Notes</span>
-              </Button>
+    asChild
+    variant="outline"
+    size="sm"
+    className="flex items-center justify-center px-4 py-2"
+  >
+    <Link 
+      to={`/home/clients/${clientDetails.id}/notes`} 
+      className="flex items-center space-x-2"
+      onClick={() => setIsDetailDialogOpen(false)} // Close the dialog when navigating
+    >
+      <FileText className="h-4 w-4" />
+      <span>Notes</span>
+    </Link>
+  </Button>
               <Button
                 variant="outline"
                 size="sm"
