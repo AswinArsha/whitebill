@@ -5,19 +5,20 @@ import { supabase } from "../supabase"
 import Quill from "quill"
 import "quill/dist/quill.snow.css"
 import {
-  ChevronDown,
-  ChevronUp,
   Calendar,
   Plus,
-  Edit,
   Trash2,
   ArrowLeft,
+  Save,
+  Edit,MoreVertical 
 } from "lucide-react"
-
-// Import your shadcn UI components (adjust paths as needed)
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -25,26 +26,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import toast, { Toaster } from "react-hot-toast"
 
-// ----------------- Quill Configuration -----------------
+// Quill configuration
 const modules = {
   toolbar: [
     [{ header: [1, 2, 3, false] }],
     ["bold", "italic", "underline"],
     [{ list: "ordered" }],
     ["blockquote"],
-    [{ script: "sub" }, { script: "super" }],
-    [{ indent: "-1" }, { indent: "+1" }],
-    [{ direction: "rtl" }],
+  
     [{ color: [] }, { background: [] }],
-    [{ align: [] }],
+
     ["link"],
   ],
 }
@@ -56,145 +49,213 @@ const formats = [
   "underline",
   "list",
   "blockquote",
-  "script",
-  "indent",
-  "direction",
+  
   "color",
   "background",
-  "align",
+
   "link",
 ]
 
-// ----------------- QuillEditor Component -----------------
-const QuillEditor = ({ value, onChange, placeholder, readOnly, style }) => {
+const QuillEditor = ({ value, onChange, placeholder }) => {
   const editorRef = useRef(null)
   const quillRef = useRef(null)
+  const containerRef = useRef(null)
+
+  // Cleanup function to remove Quill instance and related elements
+  const cleanupQuill = () => {
+    if (quillRef.current) {
+      // Remove event listeners
+      quillRef.current.off("text-change")
+      
+      // Find and remove all toolbars within the container
+      if (containerRef.current) {
+        const toolbars = containerRef.current.querySelectorAll('.ql-toolbar')
+        toolbars.forEach(toolbar => toolbar.remove())
+      }
+      
+      // Clear editor content
+      if (editorRef.current) {
+        editorRef.current.innerHTML = ''
+      }
+      
+      // Clear the Quill instance
+      quillRef.current = null
+    }
+  }
 
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
+      // Clean up any existing instances first
+      cleanupQuill()
+      
+      // Initialize new Quill instance
       quillRef.current = new Quill(editorRef.current, {
         theme: "snow",
         modules,
         formats,
         placeholder: placeholder || "",
-        readOnly: readOnly || false,
       })
 
-      if (value) {
-        quillRef.current.clipboard.dangerouslyPasteHTML(value)
-      }
+      // Set initial content
+      quillRef.current.clipboard.dangerouslyPasteHTML(value || '')
 
+      // Set up change handler
       quillRef.current.on("text-change", () => {
-        const html = editorRef.current.querySelector(".ql-editor").innerHTML
+        const html = quillRef.current.root.innerHTML
         onChange(html)
       })
     }
-  }, [onChange])
 
-  useEffect(() => {
-    if (quillRef.current) {
-      const currentHTML = editorRef.current.querySelector(".ql-editor").innerHTML
-      if (value !== currentHTML) {
-        const selection = quillRef.current.getSelection()
-        quillRef.current.clipboard.dangerouslyPasteHTML(value || "")
-        if (selection) {
-          quillRef.current.setSelection(selection)
-        }
-      }
-    }
-  }, [value])
-
-  return <div ref={editorRef} style={style} />
-}
-
-// ----------------- TimelineNote Component -----------------
-const TimelineNote = ({ note, onEdit, onDelete }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  // Helper to strip HTML for length check
-  const stripHtml = (html) => {
-    const tmp = document.createElement("div")
-    tmp.innerHTML = html
-    return tmp.textContent || tmp.innerText || ""
-  }
-
-  const textLength = stripHtml(note.content).length
-  const showToggle = textLength > 150
+    // Cleanup on unmount
+    return cleanupQuill
+  }, []) // Empty dependency array since we only want to initialize once
 
   return (
-    <div className="relative">
-      {/* Timeline connector */}
-      <div className="absolute left-0 top-6 w-4 h-full">
-        <div className="absolute left-[7px] top-4 w-[2px] h-full bg-gray-300" />
-      </div>
-      {/* Timeline dot */}
-      <div className="absolute left-0 top-6">
-        <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
-      </div>
-
-      <Card className="bg-transparent border-none shadow-none">
-        <CardHeader className="flex flex-row items-start justify-between pb-2">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-              <Calendar className="h-4 w-4" />
-              {format(new Date(note.note_date), "MMMM dd, yyyy")}
-            </div>
-          </div>
-          <div className="flex space-x-2">
-            <Button variant="ghost" size="sm" onClick={() => onEdit(note)}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => onDelete(note.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div
-            className={`prose prose-sm max-w-none transition-all duration-300 ${
-              !isExpanded ? "max-h-40 overflow-hidden" : ""
-            } notebook-content`}
-            dangerouslySetInnerHTML={{ __html: note.content }}
-          />
-          {showToggle && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 text-blue-600 hover:text-blue-700"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4 mr-1" /> Show Less
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4 mr-1" /> Read More
-                </>
-              )}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+    <div ref={containerRef} className="quill-container">
+      <div ref={editorRef} className="h-64" />
     </div>
   )
 }
 
-// ----------------- Main Notes Component -----------------
+// Timeline Note Editor Component with improved cleanup
+const TimelineNoteEditor = ({ 
+  note,
+  onSave, 
+  onDelete,
+}) => {
+  const [isEditing, setIsEditing] = useState(note.isNew)
+  const [noteContent, setNoteContent] = useState(note.content)
+  const editorContainerRef = useRef(null)
+
+  const handleSave = () => {
+    if (!noteContent || noteContent === "<p><br></p>") {
+      toast.error("Please fill in the note content")
+      return
+    }
+    
+    if (editorContainerRef.current) {
+      const toolbars = editorContainerRef.current.querySelectorAll('.ql-toolbar')
+      toolbars.forEach(toolbar => toolbar.remove())
+    }
+    
+    onSave(note.id, noteContent)
+    setIsEditing(false)
+  }
+
+  return (
+    <div className="relative pl-8 mb-8">
+      {/* Timeline connector */}
+      <div className="absolute -mt-1 left-0 top-6 w-4 h-full">
+        <div className="absolute left-[7px] top-4 w-[2px] h-full bg-gray-200" />
+      </div>
+      {/* Timeline dot */}
+      <div className="absolute -mt-2 left-0 top-6">
+        <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
+      </div>
+
+      <div className="bg-white rounded-lg border  border-gray-100 overflow-hidden ">
+        <div className="flex items-center justify-between p-1 md:p-4 border-b border-gray-100">
+          <div className="flex items-center gap-2 text-gray-600">
+            <Calendar className="h-4 w-4" />
+            <span className="text-xs md:text-base">
+              {format(new Date(note.date), "MMM d, yyyy")}
+            </span>
+          </div>
+
+          {/* Desktop Actions */}
+          <div className="hidden md:flex gap-2">
+            {isEditing ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSave}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(note.id)}
+              className="text-red-500 hover:text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Mobile Actions */}
+          <div className="md:hidden">
+            {isEditing ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSave}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => onDelete(note.id)}
+                    className="text-red-500 focus:text-red-500"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+
+        <div ref={editorContainerRef} className="relative p-4">
+          {isEditing ? (
+            <QuillEditor
+              key={`editor-${note.id}-${isEditing}`}
+              value={noteContent}
+              onChange={setNoteContent}
+              placeholder="Write your note here..."
+            />
+          ) : (
+            <div 
+              className="prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: noteContent }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Main Notes Component
 const Notes = () => {
   const { clientId } = useParams()
   const navigate = useNavigate()
-  const [notes, setNotes] = useState([])
   const [clientDetails, setClientDetails] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"))
-  const [isAddNoteOpen, setIsAddNoteOpen] = useState(false)
-  
-  // currentNote holds only content and note_date; title is defaulted to "Untitled Note"
-  const [currentNote, setCurrentNote] = useState({
-    content: "",
-    note_date: format(new Date(), "yyyy-MM-dd"),
-  })
-  const [isEditing, setIsEditing] = useState(false)
+  const [notes, setNotes] = useState([])
 
   // Generate months for the current year
   const currentYear = new Date().getFullYear()
@@ -206,121 +267,140 @@ const Notes = () => {
     }
   })
 
-  // ----------------- Data Fetching -----------------
+  // Fetch client details and notes
   useEffect(() => {
-    const fetchClientDetails = async () => {
-      const { data, error } = await supabase
+    const fetchData = async () => {
+      // Fetch client details
+      const { data: clientData, error: clientError } = await supabase
         .from("clients")
         .select("*")
         .eq("id", clientId)
         .single()
-      if (error) {
+
+      if (clientError) {
         toast.error("Error fetching client details")
         return
       }
-      setClientDetails(data)
-    }
+      setClientDetails(clientData)
 
-    const fetchNotes = async () => {
+      // Fetch notes for selected month
       const startDate = format(startOfMonth(new Date(selectedMonth)), "yyyy-MM-dd")
       const endDate = format(endOfMonth(new Date(selectedMonth)), "yyyy-MM-dd")
-      const { data, error } = await supabase
+      
+      const { data: notesData, error: notesError } = await supabase
         .from("client_notes")
         .select("*")
         .eq("client_id", clientId)
         .gte("note_date", startDate)
         .lte("note_date", endDate)
-        .order("note_date", { ascending: false })
-      if (error) {
+        .order("created_at", { ascending: true })
+
+      if (notesError) {
         toast.error("Error fetching notes")
         return
       }
-      setNotes(data)
+
+      // Transform notes data to include position
+      const transformedNotes = notesData.map((note, index) => ({
+        id: note.id,
+        content: note.content,
+        date: note.note_date,
+        position: index,
+        isNew: false
+      }))
+
+      setNotes(transformedNotes)
     }
 
-    fetchClientDetails()
-    fetchNotes()
+    fetchData()
   }, [clientId, selectedMonth])
 
-  // ----------------- Handlers -----------------
-  const handleSubmit = async () => {
-    if (!currentNote.content || currentNote.content === "<p><br></p>") {
-      toast.error("Please fill in the note content")
-      return
+  const handleAddNote = () => {
+    const newNote = {
+      id: `temp-${Date.now()}`,
+      content: "",
+      date: format(new Date(), "yyyy-MM-dd"),
+      position: notes.length,
+      isNew: true
     }
+    setNotes(prev => [...prev, newNote])
+  }
 
-    const userUUID =
-      typeof clientId === "number"
-        ? `00000000-0000-0000-0000-${clientId.toString().padStart(12, "0")}`
-        : clientId
-
+  const handleSaveNote = async (noteId, content) => {
+    const note = notes.find(n => n.id === noteId)
+    
     const noteData = {
-      content: currentNote.content,
-      note_date: currentNote.note_date,
+      content,
+      note_date: note.date,
       title: "Untitled Note",
       client_id: clientId,
-      created_by: userUUID,
+      created_by: clientId
     }
 
-    const { error } = isEditing
-      ? await supabase.from("client_notes").update(noteData).eq("id", currentNote.id)
-      : await supabase.from("client_notes").insert([noteData])
+    if (note.isNew) {
+      const { data, error } = await supabase
+        .from("client_notes")
+        .insert([noteData])
+        .select()
+      
+      if (error) {
+        toast.error("Error creating note")
+        return
+      }
 
-    if (error) {
-      toast.error(isEditing ? "Error updating note" : "Error creating note")
-      console.error("Supabase error:", error)
-      return
+      setNotes(prev => prev.map(n => 
+        n.id === noteId ? {
+          ...n,
+          id: data[0].id,
+          content,
+          isNew: false
+        } : n
+      ))
+      toast.success("Note created successfully")
+    } else {
+      const { error } = await supabase
+        .from("client_notes")
+        .update(noteData)
+        .eq("id", noteId)
+      
+      if (error) {
+        toast.error("Error updating note")
+        return
+      }
+
+      setNotes(prev => prev.map(n => 
+        n.id === noteId ? {
+          ...n,
+          content
+        } : n
+      ))
+      toast.success("Note updated successfully")
     }
-
-    toast.success(isEditing ? "Note updated successfully" : "Note created successfully")
-    setIsAddNoteOpen(false)
-    resetForm()
-    // Re-fetch notes after submission
-    const startDate = format(startOfMonth(new Date(selectedMonth)), "yyyy-MM-dd")
-    const endDate = format(endOfMonth(new Date(selectedMonth)), "yyyy-MM-dd")
-    const { data } = await supabase
-      .from("client_notes")
-      .select("*")
-      .eq("client_id", clientId)
-      .gte("note_date", startDate)
-      .lte("note_date", endDate)
-      .order("note_date", { ascending: false })
-    setNotes(data)
   }
 
-  const resetForm = () => {
-    setCurrentNote({
-      content: "",
-      note_date: format(new Date(), "yyyy-MM-dd"),
-    })
-    setIsEditing(false)
-  }
-
-  const handleEdit = (note) => {
-    setCurrentNote({
-      content: note.content,
-      note_date: format(new Date(note.note_date), "yyyy-MM-dd"),
-      id: note.id,
-    })
-    setIsEditing(true)
-    setIsAddNoteOpen(true)
-  }
-
-  const handleDelete = async (noteId) => {
-    const { error } = await supabase.from("client_notes").delete().eq("id", noteId)
-    if (error) {
-      toast.error("Error deleting note")
-      return
+  const handleDeleteNote = async (noteId) => {
+    const note = notes.find(n => n.id === noteId)
+    
+    if (!note.isNew) {
+      const { error } = await supabase
+        .from("client_notes")
+        .delete()
+        .eq("id", noteId)
+      
+      if (error) {
+        toast.error("Error deleting note")
+        return
+      }
     }
+    
+    setNotes(prev => prev.filter(n => n.id !== noteId))
     toast.success("Note deleted successfully")
-    setNotes(notes.filter((n) => n.id !== noteId))
   }
 
-  // ----------------- UI Rendering -----------------
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen ">
       <Toaster position="bottom-center" reverseOrder={false} />
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto -mt-9">
         {/* Back Button */}
         <Button
           variant="ghost"
@@ -328,21 +408,21 @@ const Notes = () => {
           onClick={() => navigate("/home/clients")}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Clients
+          <span className="md:inline hidden">Back to Clients</span>
+          <span className="md:hidden">Back</span>
         </Button>
 
         {/* Header */}
-        <div className="mb-8 p-4 border-b-2 border-gray-300">
-          <div className="flex flex-row items-center justify-between flex-wrap gap-4">
+        <div className="mb-8 pb-4 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-handwritten text-gray-800">
+              <h2 className="text-2xl md:text-3xl font-handwritten text-gray-800 mb-4 md:mb-0">
                 {clientDetails?.client_name}
               </h2>
-           
             </div>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-4">
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[180px] bg-transparent border-gray-400 text-gray-700">
+                <SelectTrigger className="w-[140px] md:w-[180px] bg-white border-gray-200 text-gray-700 text-sm md:text-base">
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent>
@@ -353,89 +433,88 @@ const Notes = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                onClick={() => {
-                  setIsEditing(false)
-                  resetForm()
-                  setIsAddNoteOpen(true)
-                }}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Note
-              </Button>
             </div>
           </div>
         </div>
 
-        {/* Timeline View */}
+        {/* Empty State */}
+        {notes.length === 0 && (
+          <div className="text-center py-12">
+            <div className="mb-4">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No notes</h3>
+            <p className="mt-1 text-sm text-gray-500">Get started by creating a new note.</p>
+          </div>
+        )}
+
+        {/* Notes Timeline */}
         <div className="space-y-6">
           {notes.map((note) => (
-            <TimelineNote key={note.id} note={note} onEdit={handleEdit} onDelete={handleDelete} />
+            <TimelineNoteEditor
+              key={note.id}
+              note={note}
+              onSave={handleSaveNote}
+              onDelete={handleDeleteNote}
+            />
           ))}
         </div>
 
-        {/* Add/Edit Note Dialog wrapped in Dialog component */}
-        <Dialog open={isAddNoteOpen} onOpenChange={setIsAddNoteOpen}>
-          <DialogContent className="max-w-[90vw] h-[90vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-handwritten text-gray-800">
-                {isEditing ? "Edit Note" : "Add New Note"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 flex-grow">
-              <div className="flex-grow">
-                <Label className="font-handwritten text-gray-700">Content</Label>
-                <div className="h-[calc(100vh-400px)] border border-gray-300 rounded-lg overflow-hidden">
-                  <QuillEditor
-                    value={currentNote.content}
-                    onChange={(content) =>
-                      setCurrentNote((prev) => ({ ...prev, content }))
-                    }
-                    placeholder="Write your note here..."
-                    style={{ height: "100%" }}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 mt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsAddNoteOpen(false)
-                  resetForm()
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isEditing ? "Save Changes" : "Add Note"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Add Note Button */}
+        <div className=" flex justify-center mt-8">
+          <Button
+          variant="outline"
+            onClick={handleAddNote}
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            <span className="font-medium">
+              Add {notes.length > 0 ? "Another" : "First"} Note
+            </span>
+          </Button>
+        </div>
 
         {/* Global Styles */}
         <style jsx global>{`
-          .ql-container {
-            font-size: 1.2rem;
-          }
-          .ql-editor {
-            min-height: 200px;
-            max-height: calc(100vh - 400px);
-            overflow-y: auto;
-            background-color: transparent;
-          }
-          .ql-toolbar {
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            background-color: #f8f8f8;
+          .ql-toolbar.ql-snow {
             border-top-left-radius: 0.5rem;
             border-top-right-radius: 0.5rem;
-            border-color: #d1d5db;
+            background-color: #f8f8f8;
+            border-color: #e5e7eb;
           }
-      
+          .ql-container.ql-snow {
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            border-color: #e5e7eb;
+          }
+          .ql-editor {
+            min-height: 150px;
+            font-size: 1rem;
+            line-height: 1.5;
+          }
+          @media (max-width: 768px) {
+            .ql-toolbar.ql-snow {
+              padding: 6px;
+            }
+            .ql-editor {
+              min-height: 120px;
+              font-size: 0.875rem;
+            }
+          }
         `}</style>
       </div>
     </div>
