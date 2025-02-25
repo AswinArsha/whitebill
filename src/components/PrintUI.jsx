@@ -1,16 +1,28 @@
-// components/PrintUI.jsx
 import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Printer } from 'lucide-react';
 import InvoicePrintComponent from "./InvoicePrintComponent";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { toWords } from 'number-to-words';
 
-const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientDetails, invoiceNumber, createdAt }) => {
+const PrintUI = ({
+  items,
+  total,
+  additionalBills,
+  onBillGenerated,
+  date,
+  clientDetails,
+  invoiceNumber,
+  createdAt
+}) => {
   const standardRef = useRef();
   const [finalInvoiceNumber, setFinalInvoiceNumber] = useState(invoiceNumber);
   const [finalCreatedAt, setFinalCreatedAt] = useState(createdAt);
+
+  // Get global values from the first item
+  const globalRate = items?.[0]?.rate || '';
+  const globalPer = items?.[0]?.per || 'NOS';
+  const globalAmount = items?.[0]?.amount || '';
 
   const handleDownload = async () => {
     // Optionally generate bill details before download
@@ -35,7 +47,6 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
 
   return (
     <div>
-      {/* Rename button to "Download Invoice" */}
       <Button 
         onClick={handleDownload} 
         className="mt-4 w-full text-white flex items-center space-x-2 rounded-md py-2 transition-colors"
@@ -44,7 +55,6 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
         <span>Download Invoice</span>
       </Button>
 
-      {/* Off-screen hidden component for PDF generation */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px" }}>
         <InvoicePrintComponent
           ref={standardRef}
@@ -55,6 +65,9 @@ const PrintUI = ({ items, total, additionalBills, onBillGenerated, date, clientD
           clientDetails={clientDetails}
           invoiceNumber={finalInvoiceNumber}
           createdAt={finalCreatedAt}
+          globalRate={globalRate}
+          globalPer={globalPer}
+          globalAmount={globalAmount}
         />
       </div>
     </div>

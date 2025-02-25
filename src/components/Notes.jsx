@@ -34,7 +34,7 @@ const modules = {
     [{ header: [1, 2, 3, false] }],
     ["bold", "italic", "underline"],
     [{ list: "ordered" }],
-    ["blockquote"],
+
   
     [{ color: [] }, { background: [] }],
 
@@ -48,7 +48,7 @@ const formats = [
   "italic",
   "underline",
   "list",
-  "blockquote",
+
   
   "color",
   "background",
@@ -143,7 +143,7 @@ const TimelineNoteEditor = ({
   }
 
   return (
-    <div className="relative pl-8 mb-8">
+    <div className="relative pl-4 mb-8">
       {/* Timeline connector */}
       <div className="absolute -mt-1 left-0 top-6 w-4 h-full">
         <div className="absolute left-[7px] top-4 w-[2px] h-full bg-gray-200" />
@@ -152,9 +152,9 @@ const TimelineNoteEditor = ({
       <div className="absolute -mt-2 left-0 top-6">
         <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
       </div>
-
-      <div className="bg-white rounded-lg border  border-gray-100 overflow-hidden ">
-        <div className="flex items-center justify-between p-1 md:p-4 border-b border-gray-100">
+    
+      <div className="bg-white rounded-lg overflow-hidden ">
+        <div className="flex items-center justify-between p-1 md:p-4 border-b ">
           <div className="flex items-center gap-2 text-gray-600">
             <Calendar className="h-4 w-4" />
             <span className="text-xs md:text-base">
@@ -229,7 +229,7 @@ const TimelineNoteEditor = ({
           </div>
         </div>
 
-        <div ref={editorContainerRef} className="relative p-4">
+        <div ref={editorContainerRef} className="relative p-1 md:p-4">
           {isEditing ? (
             <QuillEditor
               key={`editor-${note.id}-${isEditing}`}
@@ -413,7 +413,7 @@ const Notes = () => {
         </Button>
 
         {/* Header */}
-        <div className="mb-8 pb-4 border-b border-gray-200">
+        <div className="mb-2 md:mb-8 pb-4 md:border-b border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl md:text-3xl font-handwritten text-gray-800 mb-4 md:mb-0">
@@ -521,4 +521,4 @@ const Notes = () => {
   )
 }
 
-export default Notes
+export default Notes;

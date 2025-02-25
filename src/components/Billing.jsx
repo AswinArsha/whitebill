@@ -30,7 +30,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Menu } from "lucide-react";
 import { Calendar as CalendarIcon, Trash2, EllipsisVertical, Eye, Wallet, DollarSign, Printer, Check } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { addDays, format } from "date-fns";
@@ -62,39 +61,11 @@ import {
 } from "@/components/ui/menubar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { toWords } from 'number-to-words';
-import InvoicePrintComponent from "./InvoicePrintComponent";
-
-import { useReactToPrint } from 'react-to-print';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "../supabase";
 import { v4 as uuidv4 } from "uuid";
+import { toast, Toaster } from "react-hot-toast";
 
-const CATEGORIES = [
-  { value: "shoot", label: "Shoot" },
-  { value: "meeting", label: "Meeting" },
-  { value: "post", label: "Post" },
-  { value: "editing", label: "Editing" },
-  { value: "ad_campaign", label: "Ad Campaign" },
-  { value: "poster_design", label: "Poster Design" },
-  { value: "task", label: "Task" },
-];
-
-const FILTER_CATEGORIES = [{ value: "all", label: "All Categories" }, ...CATEGORIES];
-
-const getCategoryColor = (category, isDone) => {
-  if (isDone) return "#4caf50"; 
-  switch (category) {
-    case "shoot": return "#f06543";  
-    case "meeting": return "#0582ca";  
-    case "post": return "#f48c06"; 
-    case "editing": return "#9d4edd";  
-    case "ad_campaign": return "#ad2831";  
-    case "poster_design": return "#ffc300";  
-    case "task": return "#335c67";  
-    default: return "#6c757d";  
-  }
-};
 const BillingDateRangePicker = ({ dateRange, setDateRange }) => {
   return (
     <div className="mb-6">
@@ -149,14 +120,16 @@ const BillingDateRangePicker = ({ dateRange, setDateRange }) => {
 const Billing = ({ role, userId }) => {
   // State variables
   const [items, setItems] = useState([
-    { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
-    { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
-    { description: "Total Engagements", quantity: "", numberOfDays: "", rate: 0 },
-    { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
+    { description: "Reels", quantity: "", numberOfDays: "" },
+    { description: "Posters", quantity: "", numberOfDays: "" },
+    { description: "Total Engagements", quantity: "", numberOfDays: "" },
+    { description: "Story", quantity: "", numberOfDays: "" }
   ]);
+  
   const [additionalBills, setAdditionalBills] = useState([]);
   const [outstandingBalance, setOutstandingBalance] = useState(0);
   const [isBalanceAdded, setIsBalanceAdded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [billHistory, setBillHistory] = useState([]);
   const [clientDetails, setClientDetails] = useState("");
   const [manualTotal, setManualTotal] = useState(0);
@@ -176,7 +149,10 @@ const Billing = ({ role, userId }) => {
   const [balanceAmount, setBalanceAmount] = useState("");
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [viewBill, setViewBill] = useState(null);
-
+  const [globalRate, setGlobalRate] = useState("");
+  const [globalPer, setGlobalPer] = useState("");
+  const [globalAmount, setGlobalAmount] = useState("");
+  
   // New state variables for invoice number and creation date
   const [invoiceNumber, setInvoiceNumber] = useState(null);
   const [createdAt, setCreatedAt] = useState(null);
@@ -216,14 +192,21 @@ const Billing = ({ role, userId }) => {
     else setBillHistory(data);
   };
 
-  const addItem = () => setItems([...items, { description: "", quantity: "", numberOfDays: "", rate: 0 }]);
+  const addItem = () => {
+    setItems([
+      ...items,
+      { description: "", quantity: "", numberOfDays: "" }
+    ]);
+  };
+  
   const addAdditionalBill = () => setAdditionalBills([...additionalBills, { name: "", amount: "" }]);
 
   const updateItem = (index, field, value) => {
     const newItems = [...items];
-    newItems[index][field] = field === "rate" ? parseFloat(value) || 0 : value;
+    newItems[index][field] = value;
     setItems(newItems);
   };
+  
 
   const updateAdditionalBill = (index, field, value) => {
     const newAdditionalBills = [...additionalBills];
@@ -240,59 +223,109 @@ const Billing = ({ role, userId }) => {
 
   const handleBillGenerated = () => {
     return new Promise(async (resolve, reject) => {
-      const formattedDate = dateRange?.from && dateRange?.to 
-        ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
-        : dateRange?.from
-        ? format(new Date(dateRange.from), "dd/MM/yyyy")
-        : format(new Date(), "dd/MM/yyyy");
-
+      let toastId;
       try {
-        const totalAmount = parseFloat(manualTotal) || 0;
+        // Show a loading toast
+        toastId = toast.loading("Generating bill...");
+        setIsGenerating(true);
+  
+        // Validate required fields
+        if (!clientDetails) {
+          toast.error("Please select a client", { id: toastId });
+          setIsGenerating(false);
+          return reject(new Error('Client details required'));
+        }
+  
+        const formattedDate = dateRange?.from && dateRange?.to 
+          ? `${format(new Date(dateRange.from), "dd/MM/yyyy")} to ${format(new Date(dateRange.to), "dd/MM/yyyy")}` 
+          : format(new Date(), "dd/MM/yyyy");
+  
+        // Modify items to include the global values
+        const itemsWithGlobals = items.map(item => ({
+          ...item,
+          rate: globalRate,
+          per: globalPer,
+          amount: globalAmount
+        }));
+  
+        // Build the bill object
         const newBill = {
           id: uuidv4(),
           date: formattedDate,
-          total: totalAmount,
-          items: [...items],
+          total: parseFloat(manualTotal) || 0,
+          items: itemsWithGlobals,
           client_details: clientDetails,
           additional_bills: additionalBills,
           payment_mode: "",
           balance: 0,
+          buyer_id: selectedClient ? selectedClient.id : null,
         };
-
+  
         const { data, error } = await supabase
           .from('bills')
           .insert([newBill])
           .select();
-
-        if (error || !data || !data[0]) {
+  
+        if (error) {
           console.error('Error saving bill:', error);
-          throw new Error('Bill creation failed');
+          toast.error("Failed to save bill", { id: toastId });
+          setIsGenerating(false);
+          return reject(error);
         }
-
+  
+        if (!data || !data[0]) {
+          toast.error("No data received from server", { id: toastId });
+          setIsGenerating(false);
+          return reject(new Error('No data received'));
+        }
+  
+        // Set invoice details from response
         setInvoiceNumber(data[0].invoice_number);
         setCreatedAt(data[0].created_at);
         setFinalInvoiceNumber(data[0].invoice_number);
         setFinalCreatedAt(data[0].created_at);
-
+  
+        // Update bill history
         setBillHistory([data[0], ...billHistory]);
+        
+        // Reset form
         setItems([
-          { description: "Reels", quantity: "", numberOfDays: "", rate: 0 },
-          { description: "Posters", quantity: "", numberOfDays: "", rate: 0 },
-          { description: "Total Engagements", quantity: "", numberOfDays: "", rate: 0 },
-          { description: "Story", quantity: "", numberOfDays: "", rate: 0 }
+          { description: "Reels", quantity: "", numberOfDays: "" },
+          { description: "Posters", quantity: "", numberOfDays: "" },
+          { description: "Total Engagements", quantity: "", numberOfDays: "" },
+          { description: "Story", quantity: "", numberOfDays: "" }
         ]);
         setClientDetails("");
-        setManualTotal(0);
+        setSelectedClient(null);
         setAdditionalBills([]);
-        setOutstandingBalance(0);
-        setIsBalanceAdded(false);
-
+        setManualTotal(0);
+        setGlobalRate("");
+        setGlobalPer("");
+        setGlobalAmount("");
+        
+        // Success toast
+        toast.success("Bill generated successfully!", { id: toastId });
+        setIsGenerating(false);
         resolve({ invoice_number: data[0].invoice_number, created_at: data[0].created_at });
+  
       } catch (error) {
         console.error('Error during bill generation:', error);
+        // Make sure to show error toast even for unexpected errors
+        toast.error("Failed to generate bill", { id: toastId });
+        setIsGenerating(false);
         reject(error);
       }
     });
+  };
+  
+  // Update the bill generation button handler
+  const handleAddBill = async () => {
+    try {
+      await handleBillGenerated();
+    } catch (error) {
+      console.error('Error adding bill:', error);
+      // Toast is already handled in handleBillGenerated
+    }
   };
 
   const handleClientSelect = (client) => {
@@ -425,6 +458,7 @@ const Billing = ({ role, userId }) => {
 
   return (
     <div className="h-2">
+       <Toaster position="top-right" reverseOrder={false} />
       <div className="flex justify-between items-center ">
         <div className="flex space-x-5 mb-4">
           <div className=""></div>
@@ -439,11 +473,10 @@ const Billing = ({ role, userId }) => {
         </TabsList>
 
         <TabsContent value="standard">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Standard Invoice UI elements from original Billing component */}
-
-            <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden">
-              <CardHeader className="text-black">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+      {/* First card takes up 2 columns */}
+      <Card className="bg-gray-50 shadow-none rounded-lg overflow-hidden md:col-span-4">
+      <CardHeader className="text-black">
                 <CardTitle className="text-2xl">Enter Bill Details</CardTitle>
               </CardHeader>
               <CardContent className="px-6">
@@ -510,83 +543,100 @@ const Billing = ({ role, userId }) => {
                 className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-
-            {/* Items */}
-            {items.map((item, index) => (
-              <div key={index} className="flex -mx-2 mb-4">
-                <div className="w-full md:w-1/2 px-2 mb-4 md:mb-0">
-                  <Label
-                    htmlFor={`description-${index}`}
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Description
-                  </Label>
-                  <Input
-                    id={`description-${index}`}
-                    value={item.description}
-                    onChange={(e) =>
-                      updateItem(index, "description", e.target.value)
-                    }
-                    placeholder="Enter item description"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="w-full md:w-1/4 px-2 mb-4 md:mb-0">
-                  <Label
-                    htmlFor={`quantity-${index}`}
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Quantity
-                  </Label>
-                  <Input
-                    type="number"
-                    id={`quantity-${index}`}
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateItem(index, "quantity", e.target.value)
-                    }
-                    placeholder="Qty"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="w-full md:w-1/4 px-2">
-                  <Label
-                    htmlFor={`numberOfDays-${index}`}
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Days
-                  </Label>
-                  <Input
-                    type="number"
-                    id={`numberOfDays-${index}`}
-                    value={item.numberOfDays}
-                    onChange={(e) =>
-                      updateItem(index, "numberOfDays", e.target.value)
-                    }
-                    placeholder="Days"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="flex items-center justify-center w-full md:w-auto px-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteItem(index)}
-                    className="sm:mt-6"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            <Button
-              onClick={addItem}
-              variant="outline"
-              className="mt-4 mb-6 w-full"
+            <div className="mb-6 overflow-x-auto">
+  <table className="w-full border-collapse border border-gray-300">
+    <thead>
+      <tr>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Description</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Quantity</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Number</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Rate</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left hidden">Per</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Amount</th>
+        <th className="border border-gray-300 bg-gray-50 p-2 text-left">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {items.map((item, index) => (
+        <tr key={index}>
+          <td className="border border-gray-300 p-2">
+            <Input
+              value={item.description}
+              onChange={(e) => updateItem(index, "description", e.target.value)}
+              placeholder="Enter description"
+              className="border-none shadow-none"
+            />
+          </td>
+          <td className="border border-gray-300 p-2">
+            <Input
+              type="number"
+              value={item.quantity}
+              onChange={(e) => updateItem(index, "quantity", e.target.value)}
+              placeholder="Qty"
+              className="border-none shadow-none"
+            />
+          </td>
+          <td className="border border-gray-300 p-2">
+            <Input
+              type="number"
+              value={item.numberOfDays}
+              onChange={(e) => updateItem(index, "numberOfDays", e.target.value)}
+              placeholder="Days"
+              className="border-none shadow-none"
+            />
+          </td>
+          {index === 0 && (
+            <>
+              <td className="border border-gray-300 p-2" rowSpan={items.length}>
+                <Input
+                  type="number"
+                  value={globalRate}
+                  onChange={(e) => setGlobalRate(e.target.value)}
+                  placeholder="Rate"
+                  className="border-none shadow-none text-center h-full"
+                />
+              </td>
+              <td className="border border-gray-300 p-2 hidden" rowSpan={items.length}>
+                <Input
+                  value={globalPer}
+                  onChange={(e) => setGlobalPer(e.target.value)}
+                  placeholder="NOS"
+                  className="border-none shadow-none text-center h-full"
+                />
+              </td>
+              <td className="border border-gray-300 p-2" rowSpan={items.length}>
+                <Input
+                  type="number"
+                  value={globalAmount}
+                  onChange={(e) => setGlobalAmount(e.target.value)}
+                  placeholder="Amount"
+                  className="border-none shadow-none text-center h-full"
+                />
+              </td>
+            </>
+          )}
+          <td className="border border-gray-300 p-2">
+            <Button 
+              variant="destructive" 
+              size="icon"
+              onClick={() => deleteItem(index)}
             >
-              Add Item
+              <Trash2 className="h-4 w-4" />
             </Button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>    
+  
+  <Button
+    onClick={addItem}
+    variant="outline"
+    className="mt-4 w-full"
+  >
+    Add Item
+  </Button>
+</div>
 
             {/* Additional Bills */}
             <div className="mb-6">
@@ -648,27 +698,24 @@ const Billing = ({ role, userId }) => {
             </div>
                 
             <Button
-          onClick={async () => {
-            try {
-              await handleBillGenerated();
-              // Optionally show success toast/message here
-            } catch (error) {
-              console.error('Error adding bill:', error);
-            }
-          }}
-          className="mt-4 w-full text-white flex items-center justify-center space-x-2 "
-        >
-          Add Bill
-        </Button>
+  onClick={handleAddBill}
+  className="mt-4 w-full text-white flex items-center justify-center space-x-2"
+  disabled={isGenerating}
+>
+  {isGenerating ? "Generating Bill..." : "Add Bill"}
+</Button>
               </CardContent>
-            </Card>
+              
 
-            {/* Bill History Section */}
-            <Card className="bg-gray-50 md:mb-0 mb-20 shadow-none rounded-lg ">
-              <CardHeader className="text-black">
+      </Card>
+
+      {/* Second card takes up 1 column */}
+      <Card className="bg-gray-50 md:mb-0 mb-20 shadow-none rounded-lg md:col-span-2">
+                     
+      <CardHeader className="text-black">
                 <CardTitle className="text-2xl">Bill History</CardTitle>
               </CardHeader>
-              <CardContent className="px-6">
+              <CardContent className="px-6 ">
             {/* Search */}
             <div className="mb-4">
              
@@ -684,102 +731,100 @@ const Billing = ({ role, userId }) => {
 
             {/* Bill History Table */}
             <ScrollArea className="h-[56rem]  ">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Client Details</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              
-              <TableBody>
-                {filteredBillHistory.map((bill) => (
-                  <TableRow key={bill.id}>
-                    <TableCell>
-                    {bill.created_at ? new Date(bill.created_at).toLocaleDateString() : bill.date}
-                    </TableCell>
-                    <TableCell>
-                      {bill.client_details
-                        ? bill.client_details.split('\n')[0]
-                        : ''}
-                    </TableCell>
-                    <TableCell>₹{bill.total}</TableCell>
-                    <TableCell>
+            <Table className="w-full">
+  <TableHeader>
+    <TableRow>
+      <TableHead className="w-1/3">Client</TableHead>
+ 
+      <TableHead>Status</TableHead>
+      <TableHead className="w-1/3 text-right">Actions</TableHead>
+    </TableRow>
+  </TableHeader>
+  
+  <TableBody>
+    {filteredBillHistory.map((bill) => (
+      <TableRow key={bill.id}>
+        <TableCell className="w-1/3">
+          {bill.client_details
+            ? bill.client_details.split('\n')[0]
+            : ''}
+        </TableCell>
+    
+        <TableCell>
                       {bill.payment_done ? (
                         <span className="text-green-500">Done</span>
                       ) : (
                         <span className="text-red-500">Pending</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Menubar>
-                        <MenubarMenu>
-                          <MenubarTrigger>
-                            <EllipsisVertical className="h-4 w-4" />
-                          </MenubarTrigger>
-                          <MenubarContent>
-                            <MenubarItem
-                              onSelect={() => {
-                                setViewBill(bill);
-                                setIsViewOpen(true);
-                              }}
-                              className="flex items-center space-x-2"
-                            >
-                              <Eye className="h-4 w-4" />
-                              <span>View</span>
-                            </MenubarItem>
-                            <MenubarItem
-                              onSelect={() => handleDeleteBill(bill.id)}
-                              className="flex items-center space-x-2 text-red-500"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                              <span>Delete</span>
-                            </MenubarItem>
-                            <MenubarSeparator />
-                            <MenubarItem
-                              onSelect={() => {
-                                setCurrentBillId(bill.id);
-                                setIsPaymentModeOpen(true);
-                              }}
-                              className="flex items-center space-x-2"
-                            >
-                              <Wallet className="h-4 w-4" />
-                              <span>Payment Mode</span>
-                            </MenubarItem>
-                            <MenubarItem
-                              onSelect={() => {
-                                setCurrentBillId(bill.id);
-                                setIsBalanceOpen(true);
-                              }}
-                              className="flex items-center space-x-2"
-                            >
-                              <DollarSign className="h-4 w-4" />
-                              <span>Balance</span>
-                            </MenubarItem>
-                            <MenubarSeparator />
-                            <MenubarItem
-                              onSelect={() => handlePaymentDone(bill.id)}
-                              className="flex items-center justify-between space-x-2"
-                            >
-                              <span>Payment Done</span>
-                              {bill.payment_done && <Check className="ml-2 h-4 w-4 text-green-500" />}
-                            </MenubarItem>
-                          </MenubarContent>
-                        </MenubarMenu>
-                      </Menubar>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-             
-            </Table>
+
+        <TableCell className="w-1/3 text-right">
+          <Menubar className="ml-8">
+            <MenubarMenu>
+              <MenubarTrigger>
+                <EllipsisVertical className="h-4 w-4" />
+              </MenubarTrigger>
+              <MenubarContent>
+                <MenubarItem
+                  onSelect={() => {
+                    setViewBill(bill);
+                    setIsViewOpen(true);
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>View</span>
+                </MenubarItem>
+                <MenubarItem
+                  onSelect={() => handleDeleteBill(bill.id)}
+                  className="flex items-center space-x-2 text-red-500"
+                >
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                  <span>Delete</span>
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem
+                  onSelect={() => {
+                    setCurrentBillId(bill.id);
+                    setIsPaymentModeOpen(true);
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <Wallet className="h-4 w-4" />
+                  <span>Payment Mode</span>
+                </MenubarItem>
+                <MenubarItem
+                  onSelect={() => {
+                    setCurrentBillId(bill.id);
+                    setIsBalanceOpen(true);
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span>Balance</span>
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem
+                  onSelect={() => handlePaymentDone(bill.id)}
+                  className="flex items-center justify-between space-x-2"
+                >
+                  <span>Payment Done</span>
+                  {bill.payment_done && <Check className="ml-2 h-4 w-4 text-green-500" />}
+                </MenubarItem>
+              </MenubarContent>
+            </MenubarMenu>
+          </Menubar>
+        </TableCell>
+      </TableRow>
+    ))}
+  </TableBody>
+</Table>
+
             </ScrollArea>
           </CardContent>
-            </Card>
-          </div>
+
+      </Card>
+    </div>
         </TabsContent>
 
         <TabsContent value="gst">
@@ -846,107 +891,131 @@ const Billing = ({ role, userId }) => {
 
       {/* View Bill Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-md p-6">
+        <DialogContent className="sm:max-w-lg p-6">
           <DialogHeader>
             <DialogTitle className="text-lg -mt-2 text-center font-semibold text-gray-900">Bill Details</DialogTitle>
           </DialogHeader>
 
-          {viewBill && (
-            <div className="space-y-3">
-              {/* Bill Overview */}
-              <div className="flex flex-col sm:flex-row justify-between">
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><span className="font-medium">Date:</span> {viewBill.date}</p>
-                  <p><span className="font-medium">Payment Mode:</span> {viewBill.payment_mode || "Not Set"}</p>
-                  <p><span className="font-medium">Balance:</span> ₹{viewBill.balance || 0}</p>
-                </div>
-                <div className="text-sm text-gray-600 sm:text-right">
-                  <p><span className="font-medium">Invoice No:</span> {viewBill.invoice_number || ""}</p>
-                </div>
-              </div>
-              <ScrollArea className="h-72">
-                  {/* Items Section */}
-              <div className="mb-3">
-    
-    <div className="overflow-x-auto">
-      <table className="min-w-full bg-white">
-        <thead>
-          <tr>
-
-            <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Items</th>
-            <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">QTY</th>
-            <th className="px-4 py-2 bg-gray-50 border text-center text-sm font-medium text-gray-700">Days</th>
-           
-          </tr>
-        </thead>
-        <tbody>
-          {viewBill.items.map((item, index) => (
-            <tr key={index} className="hover:bg-gray-50">
-           
-              <td className="px-4 py-2 border text-sm text-gray-700">{item.description || 'N/A'}</td>
-              <td className="px-4 py-2 border text-sm text-center text-gray-700">
-                {item.quantity || '-'}
-              </td>
-              <td className="px-4 py-2 border text-sm text-center text-gray-700">
-                {item.numberOfDays || '-'}
-              </td>
-         
-            </tr>
-          ))}
-        </tbody>
-      </table>
+{/* Replace the entire content inside the dialog with this */}
+{viewBill && (
+  <div className="space-y-3">
+    {/* Bill Overview Section */}
+    <div className="flex flex-col sm:flex-row justify-between mb-6">
+      <div className="text-sm text-gray-600 space-y-1">
+        <p>
+          <span className="font-medium">Date:</span> {viewBill.date}
+        </p>
+        <p>
+          <span className="font-medium">Payment Mode:</span> {viewBill.payment_mode || "Not Set"}
+        </p>
+        <p>
+          <span className="font-medium">Balance:</span> ₹{viewBill.balance || 0}
+        </p>
+      </div>
+      <div className="text-sm text-gray-600 sm:text-right">
+        <p>
+          <span className="font-medium">Invoice No:</span> {viewBill.invoice_number || ""}
+        </p>
+      </div>
     </div>
-  </div>
 
-  {/* Additional Bills Section */}
-  {viewBill.additional_bills && viewBill.additional_bills.length > 0 && (
-    <div>
-      <h3 className="text-sm font-semibold text-gray-800">Additional Bills</h3>
+    <ScrollArea className="h-[300px]">
       <div className="overflow-x-auto">
-        <table  className="min-w-full bg-white">
-          <thead >
+        <table className="w-full border-collapse border border-gray-300">
+          <thead>
             <tr>
-              <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Name</th>
-              <th className="px-4 py-2 bg-gray-50 border text-left text-sm font-medium text-gray-700">Amount</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Description</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Quantity</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Number</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Rate</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Per</th>
+              <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {viewBill.additional_bills.map((addBill, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border text-sm text-gray-700">{addBill.name}</td>
-                <td className="px-4 py-2 border text-sm text-gray-700">₹{parseFloat(addBill.amount).toFixed(2)}</td>
+            {viewBill.items.map((item, index) => (
+              <tr key={index}>
+                <td className="border border-gray-300 p-3 text-sm text-gray-700">
+                  {item.description || 'N/A'}
+                </td>
+                <td className="border border-gray-300 p-3 text-sm text-gray-700 text-center">
+                  {item.quantity || '-'}
+                </td>
+                <td className="border border-gray-300 p-3 text-sm text-gray-700 text-center">
+                  {item.numberOfDays || '-'}
+                </td>
+                {index === 0 && (
+                  <>
+                    <td rowSpan={viewBill.items.length} className="border border-gray-300 p-3 text-sm text-gray-700 text-center align-middle">
+                      {item.rate || viewBill.items[0]?.rate || '-'}
+                    </td>
+                    <td rowSpan={viewBill.items.length} className="border border-gray-300 p-3 text-sm text-gray-700 text-center align-middle">
+                      {item.per || viewBill.items[0]?.per || 'NOS'}
+                    </td>
+                    <td rowSpan={viewBill.items.length} className="border border-gray-300 p-3 text-sm text-gray-700 text-center align-middle">
+                      ₹{item.amount || viewBill.items[0]?.amount || '0.00'}
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+
+        {/* Additional Bills Section */}
+        {viewBill.additional_bills && viewBill.additional_bills.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Additional Bills</h3>
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr>
+                  <th className="border border-gray-300 bg-gray-50 p-3 text-left text-sm font-semibold text-gray-600">Name</th>
+                  <th className="border border-gray-300 bg-gray-50 p-3 text-right text-sm font-semibold text-gray-600">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {viewBill.additional_bills.map((addBill, index) => (
+                  <tr key={index}>
+                    <td className="border border-gray-300 p-3 text-sm text-gray-700">{addBill.name}</td>
+                    <td className="border border-gray-300 p-3 text-sm text-gray-700 text-right">
+                      ₹{parseFloat(addBill.amount).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+    </ScrollArea>
+
+    {/* Total Section */}
+    <div className="mt-6 text-right border-t border-gray-200 pt-4">
+      <span className="text-lg font-semibold text-gray-700 mr-4">Total:</span>
+      <span className="text-lg font-bold text-gray-900">
+        ₹{parseFloat(viewBill.total).toFixed(2)}
+      </span>
     </div>
-  )}
-              </ScrollArea>
-              <div className="text-right font-semibold text-md text-black">
-                Total: ₹{parseFloat(viewBill.total).toFixed(2)}
-              </div>
 
-              <PrintUI
-          items={viewBill.items}
-          total={viewBill.total}
-          additionalBills={viewBill.additional_bills}
-          onBillGenerated={async () => {
-            // Since the bill is already generated and available in viewBill,
-            // simply return its invoice details.
-            return {
-              invoice_number: viewBill.invoice_number,
-              created_at: viewBill.created_at,
-            };
-          }}
-          date={viewBill.date}
-          clientDetails={viewBill.client_details}
-          invoiceNumber={viewBill.invoice_number}
-          createdAt={viewBill.created_at}
-        />
+    {/* Print Button */}
+    <PrintUI
+      items={viewBill.items}
+      total={viewBill.total}
+      additionalBills={viewBill.additional_bills}
+      onBillGenerated={async () => {
+        return {
+          invoice_number: viewBill.invoice_number,
+          created_at: viewBill.created_at,
+        };
+      }}
+      date={viewBill.date}
+      clientDetails={viewBill.client_details}
+      invoiceNumber={viewBill.invoice_number}
+      createdAt={viewBill.created_at}
+    />
+  </div>
+)}
 
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -954,3 +1023,4 @@ const Billing = ({ role, userId }) => {
 };
 
 export default Billing;
+
