@@ -541,7 +541,7 @@ const GSTBill = () => {
                     <div className="font-bold">WHITE BRANDING</div>
                     <div>51/590-2A, White branding, Nethaji road, Behind</div>
                     <div>Nethaji Ground, West Fort, Thrissur, Kerala,</div>
-                    <div>GSTIN/UIN: 32ABMCS8661D1Z6</div>
+                    <div>GSTIN/UIN: 32BYOPT4425R1ZL</div>
                     <div>State Name: Kerala, Code: 32</div>
                     <div>Phone No: 8606378902</div>
                   </div>
