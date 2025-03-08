@@ -251,14 +251,14 @@ const Attendance = ({ userId }) => {
       console.error("Missing required data:", { userId, userRole, organizationId });
       return;
     }
-
+  
     const [month, year] = selectedMonth.split(" ");
     const firstDay = startOfMonth(new Date(`${month} 1, ${year}`));
     const lastDay = endOfMonth(firstDay);
     const today = new Date();
     const lastRelevantDay = min([lastDay, today]);
     const daysInMonth = eachDayOfInterval({ start: firstDay, end: lastRelevantDay });
-
+  
     try {
       // Step 1: Fetch users with their shift information
       let usersQuery = supabase
@@ -283,36 +283,36 @@ const Attendance = ({ userId }) => {
         )
         .eq("show", true)
         .eq("organization_id", organizationId);
-
+  
       if (userRole === "user") {
         usersQuery = usersQuery.eq("id", userId);
       } else if (userRole === "admin") {
         usersQuery = usersQuery.neq("role", "superadmin");
       }
-
+  
       const { data: usersData, error: usersError } = await usersQuery;
       if (usersError) {
         console.error("Error fetching users:", usersError);
         throw usersError;
       }
-
+  
       // Step 2: Fetch attendance data
       let attendanceQuery = supabase
         .from("attendance")
         .select("user_id, date, check_in, check_out")
         .gte("date", format(firstDay, "yyyy-MM-dd"))
         .lte("date", format(lastRelevantDay, "yyyy-MM-dd"));
-
+  
       if (userRole === "user") {
         attendanceQuery = attendanceQuery.eq("user_id", userId);
       }
-
+  
       const { data: attendanceData, error: attendanceError } = await attendanceQuery;
       if (attendanceError) {
         console.error("Error fetching attendance:", attendanceError);
         throw attendanceError;
       }
-
+  
       // Step 3: Process user data into a map for quick lookup
       const userMap = usersData.reduce((acc, user) => {
         acc[user.id] = {
@@ -335,7 +335,7 @@ const Attendance = ({ userId }) => {
         };
         return acc;
       }, {});
-
+  
       // Step 4: Process attendance for each day
       for (const day of daysInMonth) {
         const isOff = await isOffDay(day, organizationId);
@@ -343,20 +343,20 @@ const Attendance = ({ userId }) => {
           const dayAttendance = attendanceData.filter((record) =>
             isSameDay(parseISO(record.date), day)
           );
-
+  
           usersData.forEach((user) => {
             const userDayAttendance = dayAttendance.filter(
               (record) => record.user_id === user.id
             );
-
+  
             if (userDayAttendance.length > 0) {
               const checkInTime = userDayAttendance[0].check_in;
               const checkOutTime =
                 userDayAttendance[userDayAttendance.length - 1].check_out;
-
+  
               const formattedCheckIn = formatTime(checkInTime);
               const formattedCheckOut = formatTime(checkOutTime);
-
+  
               let status = "Absent";
               if (checkInTime) {
                 const shift = user.shifts;
@@ -374,8 +374,15 @@ const Attendance = ({ userId }) => {
                   // Use default times if no shift is assigned
                   status = checkInTime <= lateThreshold ? "Present" : "Late";
                 }
+                
+                // Add check-in time to total for calculating average
+                if (checkInTime) {
+                  const checkInMinutes = convertTimeToMinutes(checkInTime);
+                  userMap[user.id].totalCheckInTime += checkInMinutes;
+                  userMap[user.id].checkInCount += 1;
+                }
               }
-
+  
               // Update statistics
               if (status !== "Absent") {
                 userMap[user.id].daysPresent += 1;
@@ -385,7 +392,7 @@ const Attendance = ({ userId }) => {
               } else {
                 userMap[user.id].daysAbsent += 1;
               }
-
+  
               // Update today's status if applicable
               if (isSameDay(day, new Date()) && (userRole === "admin" || user.id === userId)) {
                 userMap[user.id].status = status;
@@ -398,8 +405,16 @@ const Attendance = ({ userId }) => {
           });
         }
       }
-
-      // Step 5: Update state with processed data
+  
+      // Step 5: Calculate average check-in time for each user
+      Object.values(userMap).forEach(user => {
+        if (user.checkInCount > 0) {
+          const avgMinutes = Math.round(user.totalCheckInTime / user.checkInCount);
+          user.averageCheckIn = formatMinutesToTime(avgMinutes);
+        }
+      });
+  
+      // Step 6: Update state with processed data
       const userList = Object.values(userMap);
       setAttendanceData(userList);
       setTotalStaff(userRole === "admin" ? usersData.length : 1);
@@ -410,6 +425,24 @@ const Attendance = ({ userId }) => {
       console.error("Detailed error in fetchAttendanceDataForMonth:", error);
       toast.error(`Failed to fetch attendance data: ${error.message}`);
     }
+  };
+  
+  // Add these helper functions if they aren't already present
+  // Convert "HH:mm" to total minutes 
+  const convertTimeToMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    const [hour, minute] = timeStr.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  
+  // Format total minutes back to "hh:mm a"
+  const formatMinutesToTime = (totalMinutes) => {
+    if (isNaN(totalMinutes) || totalMinutes === 0) return "-";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const date = new Date();
+    date.setHours(hours, minutes);
+    return format(date, "hh:mm a");
   };
 
   // -------------------------
