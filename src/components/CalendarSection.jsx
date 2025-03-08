@@ -147,21 +147,21 @@ const CalendarSection = ({ role, userId }) => {
     try {
       const rangeStart = startOfMonth(currentMonth).toISOString();
       const rangeEnd = endOfMonth(currentMonth).toISOString();
-
+  
       let query = supabase
         .from("events")
         .select("*")
         .gte('start_time', rangeStart)
         .lte('start_time', rangeEnd);
-
+  
       if (role === "user") {
         query = query.contains('assigned_user_ids', [userId]);
       }
-
+  
       const { data: allEvents, error: baseError } = await query;
       if (baseError) throw baseError;
-
-      // Process the fetched events (ensure assigned_user_ids is an array)
+  
+      // Process the fetched events
       const processedEvents = allEvents.map(event => {
         let assignedIds = [];
         if (Array.isArray(event.assigned_user_ids)) {
@@ -175,17 +175,17 @@ const CalendarSection = ({ role, userId }) => {
         }
         return { ...event, assigned_user_ids: assignedIds };
       });
-
-      // Format events for the calendar
+  
+      // Format events for the calendar with proper timezone handling
       const formattedEvents = processedEvents.map((event) => {
         const startDate = new Date(event.start_time);
         const endDate = new Date(event.end_time);
-
+  
         return {
           id: event.id,
           uniqueKey: `${event.id}-${event.title}`,
           title: event.title || 'No Title',
-          start: startDate.toISOString(),
+          start: startDate.toISOString(), // Keep ISO format for consistent handling
           end: endDate.toISOString(),
           allDay: event.all_day || false,
           backgroundColor: getCategoryColor(event.category, event.is_done) || '#6c757d',
@@ -193,20 +193,41 @@ const CalendarSection = ({ role, userId }) => {
           extendedProps: {
             description: event.description || '',
             location: event.location || '',
-            category: event.category || null, // now a UUID reference
+            category: event.category || null,
             isDone: event.is_done || false,
             clientName: event.client_name || 'N/A',
             assignedUserIds: event.assigned_user_ids || [],
           },
         };
       }).filter(event => event !== null);
-
+  
       setEvents(formattedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
     }
   }, [role, userId, currentMonth, categories]);
+
+  const formatToUTCString = (date, isEndTime = false) => {
+    if (!date) return null;
+    
+    // Create a new date object to avoid modifying the original
+    const d = new Date(date);
+    
+    // Create a UTC date to ensure consistent timezone handling
+    const utcDate = new Date(
+      Date.UTC(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        isEndTime ? 23 : 0, 
+        isEndTime ? 59 : 0,
+        isEndTime ? 59 : 0
+      )
+    );
+    
+    return utcDate.toISOString();
+  };
 
   useEffect(() => {
     fetchEvents();
@@ -238,12 +259,17 @@ const CalendarSection = ({ role, userId }) => {
   const handleDateSelect = (selectInfo) => {
     if (role !== "admin") return;
     setMode("add");
+    
+    // Create date objects from the selected date, ensuring we preserve the timezone
+    const startDate = new Date(selectInfo.startStr);
+    const endDate = new Date(selectInfo.endStr || selectInfo.startStr);
+    
     setNewEvent({
       id: "",
       title: "",
       description: "",
-      start: selectInfo.startStr,
-      end: selectInfo.endStr || selectInfo.startStr,
+      start: startDate.toISOString(), // Use ISO format to preserve timezone information
+      end: endDate.toISOString(),
       location: "",
       category: "",
       allDay: selectInfo.allDay,
@@ -341,17 +367,47 @@ const CalendarSection = ({ role, userId }) => {
     }
 
     if (validateEvent()) {
+      // Create properly localized date objects
+      const startDate = new Date(newEvent.start);
+      const endDate = new Date(newEvent.end);
+      
+      // Format the dates properly for storage
+      let formattedStartTime, formattedEndTime;
+      
+      if (newEvent.allDay) {
+        // For all-day events, set to start of day in UTC
+        formattedStartTime = new Date(
+          Date.UTC(
+            startDate.getFullYear(),
+            startDate.getMonth(),
+            startDate.getDate(), 
+            0, 0, 0
+          )
+        ).toISOString();
+        
+        // For all-day events, set to end of day in UTC
+        formattedEndTime = new Date(
+          Date.UTC(
+            endDate.getFullYear(),
+            endDate.getMonth(),
+            endDate.getDate(),
+            23, 59, 59
+          )
+        ).toISOString();
+      } else {
+        // For time-specific events, just use the ISO strings directly
+        formattedStartTime = startDate.toISOString();
+        formattedEndTime = endDate.toISOString();
+      }
+  
+ 
       const eventToSubmit = {
         title: newEvent.title,
         description: newEvent.description,
-        start_time: newEvent.allDay
-          ? `${newEvent.start}T00:00:00Z`
-          : newEvent.start,
-        end_time: newEvent.allDay
-          ? `${newEvent.end}T23:59:59Z`
-          : newEvent.end,
+        start_time: formattedStartTime,
+        end_time: formattedEndTime,
         location: newEvent.location,
-        category: newEvent.category, // now a UUID reference
+        category: newEvent.category,
         all_day: newEvent.allDay,
         is_done: newEvent.isDone,
         client_name: newEvent.clientName,
